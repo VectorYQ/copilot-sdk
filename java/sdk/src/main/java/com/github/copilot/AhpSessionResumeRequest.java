@@ -17,8 +17,11 @@ import java.util.concurrent.CompletionStage;
  *            host-selected resume settings
  * @param cancellation
  *            completes normally when the participation ends
+ * @param authentication
+ *            trusted current host admission identity, never session
+ *            configuration
  */
 @CopilotExperimental
-public record AhpSessionResumeRequest(String sessionId, ResumeSessionConfig config,
-        CompletionStage<Void> cancellation) {
+public record AhpSessionResumeRequest(String sessionId, ResumeSessionConfig config, CompletionStage<Void> cancellation,
+        AhpSessionAuthentication authentication) {
 }

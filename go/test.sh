@@ -2,6 +2,7 @@
 # Test script for Go SDK (when Go is available)
 
 set -e
+set -o pipefail
 
 echo "=== Testing Go SDK ==="
 echo
@@ -42,7 +43,13 @@ cd "$(dirname "$0")"
 echo "=== Running Go SDK E2E Tests ==="
 echo
 
-go test -v ./... -race -timeout=20m
+if [ -n "${CI_TEST_RESULTS_DIR:-}" ]; then
+    output="${CI_TEST_GO_OUTPUT:-$CI_TEST_RESULTS_DIR/go-sdk-go-subprocess.jsonl}"
+    mkdir -p "$(dirname "$output")"
+    go test -json -v ./... -race -timeout=20m | tee "$output"
+else
+    go test -v ./... -race -timeout=20m
+fi
 
 echo
 echo "✅ All tests passed!"

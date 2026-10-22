@@ -21,6 +21,8 @@ export {
     AhpHost,
     type AhpHostExit,
     type AhpHostOptions,
+    type AhpHostAuthentication,
+    type AhpSessionAuthentication,
     type AhpSessionCreateRequest,
     type AhpSessionResumeRequest,
 } from "./host.js";
@@ -112,6 +114,7 @@ export type {
     CopilotClientInfo,
     CopilotClientMode,
     CopilotClientOptions,
+    EntraAuthConfig,
     InstallationConfirmationHandler,
     InstallationConfirmationRequest,
     InstallationConfirmationResponse,

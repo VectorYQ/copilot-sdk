@@ -58,6 +58,7 @@ detached, and the hosting task has stopped, not merely that shutdown was request
 await client.start();
 const host = await client.startAhpHost({
     localServer: {},
+    authentication: { mode: "github" },
     onExit: (exit) => console.log(`AHP host stopped: ${exit.reason}`),
 });
 // Connect an AHP client using host.url and, when defined, host.token.
@@ -65,8 +66,8 @@ const host = await client.startAhpHost({
 await client.stop();
 ```
 
-`AhpHostOptions` requires at least one explicit transport: `localServer`,
-`githubEnvironment`, or both. There is no implicit local listener.
+All SDK hosting options require explicit authentication and a transport:
+`localServer`, `githubEnvironment`, or both. No listener is implicit.
 `localServer` accepts `hostname`, `port`, `token`, and
 `requireConnectionToken`. The hostname defaults to `127.0.0.1`; explicit
 non-loopback addresses are allowed. An omitted or zero port selects an available
@@ -82,7 +83,11 @@ and authorization remain in effect independently. Explicit public binding or
 disabling the connection gate is the application's choice; the default remains
 loopback with a generated token. Tokens travel over framed SDK RPC, not argv.
 
-Node.js, Rust, Python, Go, .NET, and Java expose experimental thin handles over the generated host RPCs.
+Select GitHub, custom, or anonymous (`none`) admission explicitly in every client mode.
+Custom validators receive the decrypted token and cancellation signal; accepted
+results require the exact configured owner and future RFC3339 expiry. Rejection,
+exceptions, invalid results, and cancellation fail closed. Custom and anonymous
+hosting are direct-only; Mission Control requires GitHub authentication.
 `onExit` is a local callback, not part of the serialized start request. There is no
 `closed` promise and no public generic notification-registration API.
 
@@ -90,11 +95,12 @@ Node.js, Rust, Python, Go, .NET, and Java expose experimental thin handles over 
 
 ```ts
 const host = await client.startAhpHost({
+    authentication: { mode: "github" },
     githubEnvironment: {
         name: "My application",
         computeId: "stable-application-installation-id",
     },
-    // Include localServer: {} to also enable a local listener.
+    // localServer: {} also enables a local listener.
 });
 console.log(host.environmentId);
 ```
@@ -165,6 +171,7 @@ import { approveAll, type CopilotClient } from "@github/copilot-sdk";
 async function startApplicationHost(client: CopilotClient) {
     return client.startAhpHost({
         localServer: {},
+        authentication: { mode: "github" },
         createSession: ({ config, signal }) => {
             signal.throwIfAborted();
             return client.createSession({
@@ -185,13 +192,14 @@ async function startApplicationHost(client: CopilotClient) {
 
 ```rust
 use std::sync::Arc;
-use github_copilot_sdk::{AhpHost, AhpHostOptions, AhpSessionRequest, Client, Error};
+use github_copilot_sdk::{AhpHost, AhpHostAuthentication, AhpHostOptions, AhpSessionRequest, Client, Error};
 use github_copilot_sdk::rpc::HostLocalServerOptions;
 
 async fn start_application_host(owner: &Client) -> Result<AhpHost, Error> {
     owner
         .start_ahp_host(
             AhpHostOptions::new()
+                .with_authentication(AhpHostAuthentication::Github)
                 .with_local_server(HostLocalServerOptions::default())
                 .with_create_session(
                     |request: AhpSessionRequest, client: Client| async move {
@@ -217,7 +225,7 @@ async fn start_application_host(owner: &Client) -> Result<AhpHost, Error> {
 
 ```python
 from copilot import (
-    AhpHostOptions, AhpSessionCreateRequest, CopilotClient, CopilotSession,
+    AhpHostAuthentication, AhpHostOptions, AhpSessionCreateRequest, CopilotClient, CopilotSession,
     PermissionHandler,
 )
 from copilot.rpc import HostLocalServerOptions
@@ -233,6 +241,7 @@ async def start_application_host(client: CopilotClient):
 
     return await client.start_ahp_host(
         AhpHostOptions(
+            authentication=AhpHostAuthentication("github"),
             local_server=HostLocalServerOptions(),
             create_session=create,
             on_session_released=release,
@@ -255,6 +264,7 @@ import (
 
 func startApplicationHost(ctx context.Context, client *copilot.Client) (*copilot.AhpHost, error) {
     return client.StartAhpHost(ctx, &copilot.AhpHostOptions{
+        Authentication: copilot.AhpHostAuthentication{Mode: "github"},
         LocalServer: &rpc.HostLocalServerOptions{},
         CreateSession: func(ctx context.Context, request copilot.AhpSessionCreateRequest) (*copilot.Session, error) {
             request.Config.OnPermissionRequest = copilot.PermissionHandler.ApproveAll
@@ -283,6 +293,7 @@ static class HostingExample
     public static Task<AhpHost> StartApplicationHostAsync(CopilotClient client) =>
         client.StartAhpHostAsync(new AhpHostOptions
         {
+            Authentication = new AhpHostAuthentication.GitHub(),
             LocalServer = new(),
             CreateSession = request =>
             {
@@ -301,6 +312,7 @@ static class HostingExample
 
 ```java
 import com.github.copilot.AhpHost;
+import com.github.copilot.AhpHostAuthentication;
 import com.github.copilot.AhpHostOptions;
 import com.github.copilot.AllowCopilotExperimental;
 import com.github.copilot.CopilotClient;
@@ -312,6 +324,7 @@ import java.util.concurrent.CompletableFuture;
 class HostingExample {
     static CompletableFuture<AhpHost> startApplicationHost(CopilotClient client) {
         return client.startAhpHost(new AhpHostOptions()
+                .setAuthentication(AhpHostAuthentication.github())
                 .setLocalServer(new HostLocalServerOptions(null, null, null, null))
                 .setCreateSession(request -> client.createSession(request.config()
                         .setOnPermissionRequest(PermissionHandler.APPROVE_ALL)))
@@ -374,6 +387,10 @@ Returning a retained original `Arc<Session>` is also supported under the same
 identity and ownership checks.
 
 The other SDKs support the same create, resume, release, and publication contract:
+
+Create and resume callbacks receive trusted `authentication` separately from
+session configuration in every SDK. Custom admission tokens never enter GitHub
+or inference configuration; configure BYOK in the callback on the returned session.
 
 | SDK | Start | Resume callback | Resume the requested session | Publish |
 | --- | --- | --- | --- | --- |
@@ -455,21 +472,21 @@ must reconnect after hosting restarts; local sessions and their identities
 remain unchanged. Exiting the owning CLI stops the listener as well. Hosting
 lifetime is separate from durable publication.
 
-`--ahp-host [--listen host:port] [--workspace directory]` serves this same backend
+`--host-ahp [--host-ahp-listen host:port] [--host-directory directory]` serves this same backend
 in the CLI process, using normal SDK session construction, managed policy,
 hooks, authentication and telemetry. The old promotion backend and duplicate
 commands have been removed. The CLI defaults to a random required local
-connection token. `--ahp-host-token <value>` supplies a fixed nonempty token
-(`localServer.token`); `--ahp-host-disable-token` sets
+connection token. `--host-ahp-token <value>` supplies a fixed nonempty token
+(`localServer.token`); `--host-ahp-disable-token` sets
 `localServer.requireConnectionToken` to `false`. These options require
-`--ahp-host` and cannot be combined. Explicit tokens are visible in process
+`--host-ahp` and cannot be combined. Explicit tokens are visible in process
 arguments and may be stored in shell history. Startup prints a connectable
 `AHP 1.0 endpoint` URL with the active token URL-encoded in its `tkn` query parameter,
 not a separate token line. Disabling the token leaves the URL without that
 parameter. Treat this stdout URL as a credential; ordinary host logs retain
 the bare endpoint. GitHub authentication and resource authorization remain
 required in both modes, independently of SDK `--auth-token-env` or client-side
-`--ahp-authenticate-with-github`.
+`--ahp-authenticate github`.
 Local-owner `/remote on|off|show` retains its independent
 Mission Control path; the old attached-AHP-client export toggle is intentionally unavailable.
 `COPILOT_AHP_SHARE_BIND` can select a wider listener for sharing;

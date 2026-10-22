@@ -78,7 +78,18 @@ struct FakeServer {
 
 impl FakeServer {
     async fn read_request(&mut self) -> Value {
-        timeout(TIMEOUT, read_framed(&mut self.read)).await.unwrap()
+        timeout(TIMEOUT, async {
+            loop {
+                let request = read_framed(&mut self.read).await;
+                if request["method"] != "session.sendAndWait" {
+                    return request;
+                }
+                self.respond_error(&request, -32601, "Method not found")
+                    .await;
+            }
+        })
+        .await
+        .unwrap()
     }
 
     async fn expect_quiet(&mut self) {

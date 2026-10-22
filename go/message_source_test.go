@@ -201,6 +201,34 @@ func TestSession_SendAndWaitMessageSource(t *testing.T) {
 	}
 }
 
+func readLegacySessionSendFrame(reader io.Reader, writer io.Writer) ([]byte, error) {
+	for {
+		frame, err := readTestJSONRPCFrame(reader)
+		if err != nil {
+			return nil, err
+		}
+		var request struct {
+			ID     json.RawMessage `json:"id"`
+			Method string          `json:"method"`
+		}
+		if err := json.Unmarshal(frame, &request); err != nil {
+			return nil, err
+		}
+		if request.Method != "session.sendAndWait" {
+			return frame, nil
+		}
+		response, err := json.Marshal(map[string]any{
+			"jsonrpc": "2.0", "id": request.ID, "error": jsonrpc2.ErrMethodNotFound,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if _, err := fmt.Fprintf(writer, "Content-Length: %d\r\n\r\n%s", len(response), response); err != nil {
+			return nil, err
+		}
+	}
+}
+
 func captureMessageSourceRequest(t *testing.T, rpcError *jsonrpc2.Error, events []SessionEvent, invoke func(*Session)) map[string]any {
 	return captureSessionSendRequest(t, rpcError, events, false, invoke)
 }
@@ -225,7 +253,7 @@ func captureSessionSendRequest(t *testing.T, rpcError *jsonrpc2.Error, events []
 	paramsCh := make(chan map[string]any, 1)
 	errCh := make(chan error, 1)
 	go func() {
-		frame, err := readTestJSONRPCFrame(stdinR)
+		frame, err := readLegacySessionSendFrame(stdinR, stdoutW)
 		if err != nil {
 			errCh <- err
 			return

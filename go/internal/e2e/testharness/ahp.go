@@ -26,8 +26,15 @@ type AhpTestClient struct {
 
 func NewAhpTestClient(t *testing.T) *AhpTestClient {
 	t.Helper()
+	return NewAhpTestClientWithDriver(t, RepoPath("nodejs", "test", "e2e", "harness", "ahpTestDriver.ts"))
+}
+
+// NewAhpTestClientWithDriver runs a language-boundary adapter using the standard
+// line-delimited AHP test protocol and the existing process lifecycle harness.
+func NewAhpTestClientWithDriver(t *testing.T, driver string) *AhpTestClient {
+	t.Helper()
 	command := exec.Command("node", "--import", "tsx",
-		RepoPath("nodejs", "test", "e2e", "harness", "ahpTestDriver.ts"))
+		driver)
 	command.Dir = RepoPath("nodejs")
 	command.Stderr = os.Stderr
 	input, err := command.StdinPipe()

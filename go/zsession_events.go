@@ -152,6 +152,11 @@ type (
 	HumanResponseRecordedResponseResponseKind                      = rpc.HumanResponseRecordedResponseResponseKind
 	HumanResponseRecordedResponseUserInput                         = rpc.HumanResponseRecordedResponseUserInput
 	IndexedSearchState                                             = rpc.IndexedSearchState
+	InstructionUpdateAuthority                                     = rpc.InstructionUpdateAuthority
+	InstructionUpdateBoundary                                      = rpc.InstructionUpdateBoundary
+	InstructionUpdateData                                          = rpc.InstructionUpdateData
+	InstructionUpdateFallback                                      = rpc.InstructionUpdateFallback
+	InstructionUpdateLifetime                                      = rpc.InstructionUpdateLifetime
 	ManagedPermissionsContext                                      = rpc.ManagedPermissionsContext
 	ManagedPluginProgressPhase                                     = rpc.ManagedPluginProgressPhase
 	ManagedSettingsEnforcedAction                                  = rpc.ManagedSettingsEnforcedAction
@@ -682,6 +687,15 @@ const (
 	IndexedSearchStateFailed                                             = rpc.IndexedSearchStateFailed
 	IndexedSearchStateReady                                              = rpc.IndexedSearchStateReady
 	IndexedSearchStateStarting                                           = rpc.IndexedSearchStateStarting
+	InstructionUpdateAuthorityHost                                       = rpc.InstructionUpdateAuthorityHost
+	InstructionUpdateAuthorityManagedPolicy                              = rpc.InstructionUpdateAuthorityManagedPolicy
+	InstructionUpdateAuthorityRuntime                                    = rpc.InstructionUpdateAuthorityRuntime
+	InstructionUpdateBoundaryAfterToolResults                            = rpc.InstructionUpdateBoundaryAfterToolResults
+	InstructionUpdateBoundaryNextModelRequest                            = rpc.InstructionUpdateBoundaryNextModelRequest
+	InstructionUpdateFallbackRebuildSystemPrompt                         = rpc.InstructionUpdateFallbackRebuildSystemPrompt
+	InstructionUpdateFallbackReject                                      = rpc.InstructionUpdateFallbackReject
+	InstructionUpdateLifetimePersistent                                  = rpc.InstructionUpdateLifetimePersistent
+	InstructionUpdateLifetimeTurn                                        = rpc.InstructionUpdateLifetimeTurn
 	ManagedPluginProgressPhaseComplete                                   = rpc.ManagedPluginProgressPhaseComplete
 	ManagedPluginProgressPhaseInitializing                               = rpc.ManagedPluginProgressPhaseInitializing
 	ManagedPluginProgressPhaseInstalling                                 = rpc.ManagedPluginProgressPhaseInstalling
@@ -1011,6 +1025,7 @@ const (
 	SessionEventTypeHookProgress                                         = rpc.SessionEventTypeHookProgress
 	SessionEventTypeHookStart                                            = rpc.SessionEventTypeHookStart
 	SessionEventTypeHumanResponseRecorded                                = rpc.SessionEventTypeHumanResponseRecorded
+	SessionEventTypeInstructionUpdate                                    = rpc.SessionEventTypeInstructionUpdate
 	SessionEventTypeMCPAppToolCallComplete                               = rpc.SessionEventTypeMCPAppToolCallComplete
 	SessionEventTypeMCPHeadersRefreshCompleted                           = rpc.SessionEventTypeMCPHeadersRefreshCompleted
 	SessionEventTypeMCPHeadersRefreshRequired                            = rpc.SessionEventTypeMCPHeadersRefreshRequired

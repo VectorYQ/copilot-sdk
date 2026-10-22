@@ -841,20 +841,21 @@ fn resume_session_config_clone_preserves_exp_assignments() {
 }
 
 #[test]
+#[allow(deprecated)]
 #[allow(clippy::field_reassign_with_default)]
 fn session_config_into_wire_serializes_bucket_b_fields() {
     use std::path::PathBuf;
 
     use super::{CloudSessionOptions, CloudSessionRepository};
 
-    let mut cfg = SessionConfig::default();
+    let mut cfg = SessionConfig::default()
+        .with_remote_session(crate::generated::api_types::RemoteSessionMode::Export);
     cfg.config_directory = Some(PathBuf::from("/tmp/cfg"));
     cfg.working_directory = Some(PathBuf::from("/tmp/work"));
     cfg.github_token = Some("ghs_secret".to_string());
     cfg.include_sub_agent_streaming_events = Some(false);
     cfg.enable_session_telemetry = Some(false);
     cfg.reasoning_summary = Some(ReasoningSummary::Concise);
-    cfg.remote_session = Some(crate::generated::api_types::RemoteSessionMode::Export);
     cfg.enable_on_demand_instruction_discovery = Some(false);
     cfg.cloud = Some(CloudSessionOptions::with_repository(
         CloudSessionRepository::new("github", "copilot-sdk").with_branch("main"),
@@ -1009,17 +1010,18 @@ fn session_config_into_wire_serializes_plugin_directories_and_large_output() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn resume_session_config_into_wire_serializes_bucket_b_fields() {
     use std::path::PathBuf;
 
-    let mut cfg = ResumeSessionConfig::new(SessionId::from("sess-1"));
+    let mut cfg = ResumeSessionConfig::new(SessionId::from("sess-1"))
+        .with_remote_session(crate::generated::api_types::RemoteSessionMode::On);
     cfg.working_directory = Some(PathBuf::from("/tmp/work"));
     cfg.config_directory = Some(PathBuf::from("/tmp/cfg"));
     cfg.github_token = Some("ghs_secret".to_string());
     cfg.include_sub_agent_streaming_events = Some(true);
     cfg.enable_session_telemetry = Some(false);
     cfg.reasoning_summary = Some(ReasoningSummary::Detailed);
-    cfg.remote_session = Some(crate::generated::api_types::RemoteSessionMode::On);
     cfg.enable_on_demand_instruction_discovery = Some(false);
 
     let (wire, _) = cfg.into_wire().expect("no duplicate handlers");
@@ -2336,5 +2338,29 @@ fn session_configs_redact_sandbox_config_in_debug() {
             "{debug}"
         );
         assert!(!debug.contains("proxy-secret"), "{debug}");
+    }
+}
+
+#[test]
+fn image_save_to_disk_create_and_resume_does_not_enable_images() {
+    for save_to_disk in [true, false] {
+        let config = ImageGenerationConfig::new().with_save_to_disk(save_to_disk);
+        let (create, _) = SessionConfig::default()
+            .with_image_generation(config.clone())
+            .into_wire(Some(SessionId::from("image-test")))
+            .unwrap();
+        let (resume, _) = ResumeSessionConfig::new(SessionId::from("image-test"))
+            .with_image_generation(config)
+            .into_wire()
+            .unwrap();
+        for wire in [
+            serde_json::to_value(create).unwrap(),
+            serde_json::to_value(resume).unwrap(),
+        ] {
+            assert_eq!(
+                wire["imageGeneration"],
+                json!({ "saveToDisk": save_to_disk })
+            );
+        }
     }
 }

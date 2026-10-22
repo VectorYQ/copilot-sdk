@@ -1319,7 +1319,6 @@ public sealed partial class CopilotClient : IDisposable, IAsyncDisposable
                 ModelCapabilities: config.ModelCapabilities,
                 GitHubToken: config.GitHubToken,
                 GitHubTokenProviderRegistrationId: registrationId,
-                RemoteSession: config.RemoteSession,
                 Cloud: config.Cloud,
                 TrustWorkingDirectory: config.TrustWorkingDirectory switch
                 {
@@ -1445,7 +1444,8 @@ public sealed partial class CopilotClient : IDisposable, IAsyncDisposable
                     or InvalidOperationException
                     or ObjectDisposedException)
                 {
-                    _logger.LogWarning(cleanupError, "Failed to delete cloud session {SessionId} after creation failed", serverAssignedSessionId);
+                    if (_logger.IsEnabled(LogLevel.Warning))
+                        _logger.LogWarning(cleanupError, "Failed to delete cloud session {SessionId} after creation failed", serverAssignedSessionId);
                 }
             }
 
@@ -1605,7 +1605,6 @@ public sealed partial class CopilotClient : IDisposable, IAsyncDisposable
                 ModelCapabilities: config.ModelCapabilities,
                 GitHubToken: config.GitHubToken,
                 GitHubTokenProviderRegistrationId: registrationId,
-                RemoteSession: config.RemoteSession,
                 ContinuePendingWork: config.ContinuePendingWork,
                 InstructionDirectories: config.InstructionDirectories,
                 AgentDirectories: config.AgentDirectories,
@@ -2317,13 +2316,18 @@ public sealed partial class CopilotClient : IDisposable, IAsyncDisposable
                     // telemetry it emits on this connection to a consistent surface instead
                     // of its own build. Null when the app didn't supply it.
                     ConnectHandshakeClientInfo.From(_options.ClientInfo),
-                    SupportedTaskKinds: [TaskKind.Agent, TaskKind.Client, TaskKind.Shell])],
+                    SupportedTaskKinds: [TaskKind.Agent, TaskKind.Client, TaskKind.Shell],
+                    Entra: _options.Entra)],
                 connection.StderrBuffer,
                 cancellationToken);
             serverVersion = (int)connectResponse.ProtocolVersion;
         }
         catch (IOException ex) when (ex.InnerException is RemoteRpcException remoteEx && IsUnsupportedConnectMethod(remoteEx))
         {
+            if (_options.Entra is not null)
+            {
+                throw new InvalidOperationException("This runtime does not support Entra client configuration.", ex);
+            }
             // Legacy server without `connect`; fall back to `ping`. A token, if any,
             // is silently dropped — the legacy server can't enforce one.
             usedFallbackPing = true;
@@ -2440,11 +2444,6 @@ public sealed partial class CopilotClient : IDisposable, IAsyncDisposable
         if (options.SessionIdleTimeoutSeconds is > 0)
         {
             args.AddRange(["--session-idle-timeout", options.SessionIdleTimeoutSeconds.Value.ToString(CultureInfo.InvariantCulture)]);
-        }
-
-        if (options.EnableRemoteSessions)
-        {
-            args.Add("--remote");
         }
 
         var (fileName, processArgs) = ResolveCliCommand(cliPath, args);
@@ -2610,10 +2609,6 @@ public sealed partial class CopilotClient : IDisposable, IAsyncDisposable
         if (options.SessionIdleTimeoutSeconds is > 0)
         {
             args.AddRange(["--session-idle-timeout", options.SessionIdleTimeoutSeconds.Value.ToString(CultureInfo.InvariantCulture)]);
-        }
-        if (options.EnableRemoteSessions)
-        {
-            args.Add("--remote");
         }
 
         var cliLoginSyncIntegrationId =
@@ -3525,7 +3520,8 @@ public sealed partial class CopilotClient : IDisposable, IAsyncDisposable
         string? Token,
         [property: JsonPropertyName("enableGitHubTelemetryForwarding")] bool? EnableGitHubTelemetryForwarding = null,
         [property: JsonPropertyName("clientInfo")] ConnectHandshakeClientInfo? ClientInfo = null,
-        [property: JsonPropertyName("supportedTaskKinds")] IList<TaskKind>? SupportedTaskKinds = null);
+        [property: JsonPropertyName("supportedTaskKinds")] IList<TaskKind>? SupportedTaskKinds = null,
+        [property: JsonPropertyName("entra")] EntraAuthConfig? Entra = null);
 
     internal record ConnectHandshakeClientInfo(
         [property: JsonPropertyName("editorName")] string? EditorName = null,
@@ -3603,6 +3599,9 @@ public sealed partial class CopilotClient : IDisposable, IAsyncDisposable
     [JsonSerializable(typeof(AhpMaterializeRequest))]
     [JsonSerializable(typeof(AhpMaterializeResult))]
     [JsonSerializable(typeof(AhpReleaseRequest))]
+    [JsonSerializable(typeof(AhpValidateAuthenticationRequest))]
+    [JsonSerializable(typeof(AhpAuthenticationCancelled))]
+    [JsonSerializable(typeof(AhpAuthenticationResult))]
     [JsonSerializable(typeof(CreateSessionResponse))]
     [JsonSerializable(typeof(AutoModeSwitchRequest))]
     [JsonSerializable(typeof(AutoModeSwitchRequestResponse))]

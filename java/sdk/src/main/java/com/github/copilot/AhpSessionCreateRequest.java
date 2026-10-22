@@ -16,7 +16,11 @@ import java.util.concurrent.CompletionStage;
  * @param cancellation
  *            completes normally when the participation ends; a late factory
  *            result is still delivered to the release callback
+ * @param authentication
+ *            trusted admission identity supplied by the host, never session
+ *            configuration
  */
 @CopilotExperimental
-public record AhpSessionCreateRequest(SessionConfig config, CompletionStage<Void> cancellation) {
+public record AhpSessionCreateRequest(SessionConfig config, CompletionStage<Void> cancellation,
+        AhpSessionAuthentication authentication) {
 }

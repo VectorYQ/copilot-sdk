@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from copilot import AhpHostOptions, CopilotClient, RuntimeConnection
+from copilot import AhpHostAuthentication, AhpHostOptions, CopilotClient, RuntimeConnection
 from copilot._jsonrpc import JsonRpcClient
 from copilot.generated.rpc import ServerRpc
 from copilot.rpc import HostGitHubEnvironmentOptions, HostLocalServerOptions
@@ -40,6 +40,7 @@ def handoff(host, *, resume=False, **config):
         "hostId": host.host_id,
         "handoffId": "participation",
         "resume": resume,
+        "authentication": {"mode": "none"},
         "config": {"sessionId": "session", "workingDirectory": "/workspace", **config},
     }
 
@@ -74,6 +75,7 @@ async def test_github_hosting_with_optional_local_transport(local):
     rpc.request.side_effect = start
     host = await client.start_ahp_host(
         AhpHostOptions(
+            authentication=AhpHostAuthentication("github"),
             compute_id="stable-installation-id",
             github_environment=HostGitHubEnvironmentOptions(
                 name="Application", compute_id="stable-installation-id"
@@ -83,6 +85,7 @@ async def test_github_hosting_with_optional_local_transport(local):
     )
     assert rpc.request.call_args.args[1] == {
         "hostId": host.host_id,
+        "authentication": {"mode": "github"},
         "computeId": "stable-installation-id",
         "githubEnvironment": {"name": "Application", "computeId": "stable-installation-id"},
         **({"localServer": {}} if local else {}),
@@ -97,10 +100,15 @@ async def test_github_hosting_with_optional_local_transport(local):
 async def test_local_compute_identity_is_forwarded_without_sdk_defaults(compute_id):
     client, rpc = client_fixture()
     host = await client.start_ahp_host(
-        AhpHostOptions(local_server=HostLocalServerOptions(), compute_id=compute_id)
+        AhpHostOptions(
+            authentication=AhpHostAuthentication("none"),
+            local_server=HostLocalServerOptions(),
+            compute_id=compute_id,
+        )
     )
     assert rpc.request.call_args.args[1] == {
         "hostId": host.host_id,
+        "authentication": {"mode": "none"},
         "localServer": {},
         **({"computeId": compute_id} if compute_id is not None else {}),
     }
@@ -112,6 +120,7 @@ async def test_handle_uses_original_transport_and_forwards_every_disposal():
     exited = Mock(side_effect=lambda _: exit_received.set())
     host = await client.start_ahp_host(
         AhpHostOptions(
+            authentication=AhpHostAuthentication("none"),
             local_server=HostLocalServerOptions(port=0, require_connection_token=False),
             on_exit=exited,
         )
@@ -120,6 +129,7 @@ async def test_handle_uses_original_transport_and_forwards_every_disposal():
     params = rpc.request.call_args_list[0].args[1]
     assert params == {
         "hostId": host.host_id,
+        "authentication": {"mode": "none"},
         "localServer": {"port": 0, "requireConnectionToken": False},
     }
     replacement = Mock(request=AsyncMock())
@@ -148,7 +158,11 @@ async def test_handle_uses_original_transport_and_forwards_every_disposal():
 
 async def test_unpublication_forwards_results_and_errors_over_original_transport():
     client, rpc = client_fixture()
-    host = await client.start_ahp_host(AhpHostOptions(local_server=HostLocalServerOptions()))
+    host = await client.start_ahp_host(
+        AhpHostOptions(
+            authentication=AhpHostAuthentication("none"), local_server=HostLocalServerOptions()
+        )
+    )
     replacement = Mock(request=AsyncMock())
     client._client = replacement
     rpc.request.reset_mock()
@@ -192,6 +206,7 @@ async def test_factories_preserve_configuration_and_release_exact_original_once(
 
     host = await client.start_ahp_host(
         AhpHostOptions(
+            authentication=AhpHostAuthentication("none"),
             local_server=HostLocalServerOptions(),
             create_session=create,
             resume_session=restore,
@@ -238,7 +253,11 @@ async def test_resume_can_return_a_retained_original_without_reconfiguration():
     original = await client.create_session(session_id="session", working_directory="/workspace")
     factory = AsyncMock(return_value=original)
     host = await client.start_ahp_host(
-        AhpHostOptions(local_server=HostLocalServerOptions(), resume_session=factory)
+        AhpHostOptions(
+            authentication=AhpHostAuthentication("none"),
+            local_server=HostLocalServerOptions(),
+            resume_session=factory,
+        )
     )
     rpc.request.reset_mock()
     assert await client._ahp_hosts.materialize(handoff(host, resume=True)) == {
@@ -267,6 +286,7 @@ async def test_invalid_factory_result_is_rejected_and_released_without_destructi
 
     host = await client.start_ahp_host(
         AhpHostOptions(
+            authentication=AhpHostAuthentication("none"),
             local_server=HostLocalServerOptions(),
             create_session=create,
             on_session_released=released,
@@ -299,6 +319,7 @@ async def test_cancelled_handoff_unblocks_before_late_factory_and_releases_it_on
 
     host = await client.start_ahp_host(
         AhpHostOptions(
+            authentication=AhpHostAuthentication("none"),
             local_server=HostLocalServerOptions(),
             create_session=create,
             on_session_released=on_released,
@@ -333,6 +354,7 @@ async def test_cancelled_factory_returns_rpc_error_and_releases_handoff(resume):
 
     host = await client.start_ahp_host(
         AhpHostOptions(
+            authentication=AhpHostAuthentication("none"),
             local_server=HostLocalServerOptions(),
             create_session=factory,
             resume_session=factory,
@@ -369,7 +391,10 @@ async def test_start_failure_removes_factory_and_exit_callback():
     with pytest.raises(RuntimeError, match="bind failed"):
         await client.start_ahp_host(
             AhpHostOptions(
-                local_server=HostLocalServerOptions(), create_session=AsyncMock(), on_exit=exited
+                authentication=AhpHostAuthentication("none"),
+                local_server=HostLocalServerOptions(),
+                create_session=AsyncMock(),
+                on_exit=exited,
             )
         )
     client._ahp_hosts.disconnect()
@@ -404,7 +429,11 @@ async def test_cancelled_start_settles_before_cleanup_on_original_connection(
     rpc.request.side_effect = request
     task = asyncio.create_task(
         client.start_ahp_host(
-            AhpHostOptions(local_server=HostLocalServerOptions(), create_session=AsyncMock())
+            AhpHostOptions(
+                authentication=AhpHostAuthentication("none"),
+                local_server=HostLocalServerOptions(),
+                create_session=AsyncMock(),
+            )
         )
     )
     await asyncio.wait_for(accepted.wait(), 1)
@@ -446,7 +475,10 @@ async def test_failed_factory_does_not_leave_capture_on_retained_original(resume
 
     host = await client.start_ahp_host(
         AhpHostOptions(
-            local_server=HostLocalServerOptions(), create_session=create, resume_session=restore
+            authentication=AhpHostAuthentication("none"),
+            local_server=HostLocalServerOptions(),
+            create_session=create,
+            resume_session=restore,
         )
     )
     with pytest.raises(RuntimeError, match="application setup failed"):
@@ -463,6 +495,7 @@ async def test_factory_error_propagates_and_release_callback_errors_are_logged(c
     client, _ = client_fixture()
     host = await client.start_ahp_host(
         AhpHostOptions(
+            authentication=AhpHostAuthentication("none"),
             local_server=HostLocalServerOptions(),
             create_session=AsyncMock(side_effect=ValueError("factory failed")),
         )
@@ -481,6 +514,7 @@ async def test_factory_error_propagates_and_release_callback_errors_are_logged(c
 
     host = await client.start_ahp_host(
         AhpHostOptions(
+            authentication=AhpHostAuthentication("none"),
             local_server=HostLocalServerOptions(),
             create_session=create,
             on_session_released=fail_release,

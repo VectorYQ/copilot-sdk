@@ -7,9 +7,10 @@ from typing import Any
 
 
 class AhpTestClient:
-    def __init__(self):
+    def __init__(self, driver_path: Path | None = None):
         self._process: asyncio.subprocess.Process | None = None
         self._lock = asyncio.Lock()
+        self._driver_path = driver_path
 
     async def __aenter__(self):
         sdk = Path(__file__).parents[3]
@@ -17,7 +18,7 @@ class AhpTestClient:
             "node",
             "--import",
             "tsx",
-            str(sdk / "nodejs/test/e2e/harness/ahpTestDriver.ts"),
+            str(self._driver_path or sdk / "nodejs/test/e2e/harness/ahpTestDriver.ts"),
             cwd=sdk / "nodejs",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,

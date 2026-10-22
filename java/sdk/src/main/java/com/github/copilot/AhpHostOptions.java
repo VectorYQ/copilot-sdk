@@ -18,7 +18,9 @@ import java.util.function.Function;
  */
 @CopilotExperimental
 public final class AhpHostOptions {
+    private AhpHostAuthentication authentication;
     private String computeId;
+    private Boolean allowCreatingNewSessions;
     private HostLocalServerOptions localServer;
     private HostGitHubEnvironmentOptions githubEnvironment;
     private Function<AhpSessionCreateRequest, CompletableFuture<CopilotSession>> createSession;
@@ -27,14 +29,16 @@ public final class AhpHostOptions {
     private Function<AhpHostExit, CompletableFuture<Void>> onExit;
 
     /**
-     * Creates options without a transport. Set a local server, a GitHub
-     * environment, or both before starting the host.
+     * Creates options without authentication or a transport. Select an admission
+     * policy and at least one transport before starting the host.
      */
     public AhpHostOptions() {
     }
 
     AhpHostOptions(AhpHostOptions options) {
+        authentication = options.authentication;
         computeId = options.computeId;
+        allowCreatingNewSessions = options.allowCreatingNewSessions;
         localServer = options.localServer;
         githubEnvironment = options.githubEnvironment;
         createSession = options.createSession;
@@ -44,12 +48,54 @@ public final class AhpHostOptions {
     }
 
     /**
+     * Gets the explicitly selected admission policy.
+     *
+     * @return the policy, or null if not configured
+     */
+    public AhpHostAuthentication getAuthentication() {
+        return authentication;
+    }
+
+    /**
+     * Selects host admission independently of inference authentication.
+     *
+     * @param authentication
+     *            required policy in every client mode
+     * @return these options
+     */
+    public AhpHostOptions setAuthentication(AhpHostAuthentication authentication) {
+        this.authentication = authentication;
+        return this;
+    }
+
+    /**
      * Gets the durable catalog's compute identity.
      *
      * @return the stable compute identity, or {@code null} for the runtime default
      */
     public String getComputeId() {
         return computeId;
+    }
+
+    /**
+     * Gets the remote creation admission policy.
+     *
+     * @return the policy, or {@code null} for the denied default
+     */
+    public Boolean getAllowCreatingNewSessions() {
+        return allowCreatingNewSessions;
+    }
+
+    /**
+     * Selects remote creation admission independently of session factories.
+     *
+     * @param allowed
+     *            the policy, or {@code null} for the denied default
+     * @return these options
+     */
+    public AhpHostOptions setAllowCreatingNewSessions(Boolean allowed) {
+        allowCreatingNewSessions = allowed;
+        return this;
     }
 
     /**

@@ -93,7 +93,8 @@ public sealed partial class CopilotSession
         var message = options.Clone();
         message.ResponseSchema = schema;
 
-        var response = await SendAndWaitForStructuredMessageAsync(message, timeout, cancellationToken);
+        var response = await SendAndWaitAsync(message, timeout, cancellationToken)
+            ?? throw new InvalidOperationException("The turn completed without a final structured response.");
         return JsonSerializer.Deserialize(response.Data.Content, typeInfo)
             ?? throw new JsonException("The structured response was JSON null, not a result.");
     }
@@ -116,10 +117,10 @@ public sealed partial class CopilotSession
         return resolved;
     }
 
-    private async Task<AssistantMessageEvent> SendAndWaitForStructuredMessageAsync(
+    private async Task<AssistantMessageEvent> SendAndWaitForStructuredMessageLegacyAsync(
         MessageOptions options, TimeSpan? timeout, CancellationToken cancellationToken)
     {
-        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(60);
+        var effectiveTimeout = timeout ?? s_defaultSendAndWaitTimeout;
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(effectiveTimeout);
         var completion = new TaskCompletionSource<AssistantMessageEvent>(TaskCreationOptions.RunContinuationsAsynchronously);

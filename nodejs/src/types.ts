@@ -35,7 +35,6 @@ import type {
     DiagnosticsConfiguration,
     OpenCanvasInstance,
     ProtocolExternalToolNamespace,
-    RemoteSessionMode,
     CurrentToolMetadata,
     SandboxConfig,
 } from "./generated/rpc.js";
@@ -398,7 +397,15 @@ export interface CopilotClientInfo {
     integrationVersion?: string;
 }
 
+export type EntraAuthConfig = import("./generated/rpc.js").EntraAuthConfig;
+
 export interface CopilotClientOptions {
+    /**
+     * Host application's Microsoft Entra registration, shared by its sessions.
+     * Required for built-in Entra sign-in and token renewal; other authentication methods remain available.
+     * @experimental
+     */
+    entra?: EntraAuthConfig;
     /**
      * How to connect to the Copilot runtime. When omitted, defaults to
      * {@link RuntimeConnection.forStdio} with the bundled runtime.
@@ -575,15 +582,6 @@ export interface CopilotClientOptions {
      * @default undefined (disabled)
      */
     sessionIdleTimeoutSeconds?: number;
-
-    /**
-     * Enable remote session support (Mission Control integration).
-     * When true, sessions in a GitHub repository working directory are
-     * accessible from GitHub web and mobile.
-     * Ignored when connecting to an existing runtime via {@link RuntimeConnection.forUri}.
-     * @default false
-     */
-    enableRemoteSessions?: boolean;
 
     /**
      * Identity of the integrating application, forwarded to the runtime on the
@@ -927,6 +925,16 @@ export interface ImageGenerationConfig {
      * or enforce enterprise policy.
      */
     watermark?: boolean;
+    /**
+     * Experimental. Save generated and edited images under the session-state
+     * directory's `images` folder and give the model each path as a
+     * `saved_to:` line in the tool result. Defaults to true; set false to opt
+     * out. Subagents follow
+     * their parent's value unless they set their own. A failed save still
+     * returns the image. Sessions without a local session-state directory never
+     * save. Re-supply after cold resume. Does not enable image generation.
+     */
+    saveToDisk?: boolean;
 }
 
 /**
@@ -3305,14 +3313,6 @@ export interface SessionConfigBase {
      * `skillDirectories` or `enableConfigDiscovery` settings.
      */
     enableSkills?: boolean;
-
-    /**
-     * Per-session remote behavior control:
-     * - `"off"` — local only, no remote export (default)
-     * - `"export"` — export session events to GitHub without enabling remote steering
-     * - `"on"` — export to GitHub AND enable remote steering
-     */
-    remoteSession?: RemoteSessionMode;
 
     /**
      * Optional event handler that is registered on the session before the

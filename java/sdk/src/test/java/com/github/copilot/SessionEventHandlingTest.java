@@ -64,6 +64,10 @@ public class SessionEventHandlingTest {
     }
 
     private CopilotSession createTestSession(JsonRpcClient rpc) throws Exception {
+        if (rpc != null) {
+            when(rpc.invoke(eq("session.sendAndWait"), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                    .thenReturn(CompletableFuture.failedFuture(new JsonRpcException(-32601, "Method not found")));
+        }
         // Use the package-private constructor via reflection for testing
         var constructor = CopilotSession.class.getDeclaredConstructor(String.class, JsonRpcClient.class, String.class);
         constructor.setAccessible(true);
@@ -256,7 +260,7 @@ public class SessionEventHandlingTest {
                 .thenReturn(CompletableFuture.completedFuture(new SendMessageResponse("message-1")));
         when(rpc.invoke(eq("session.detach"), any(), eq(CopilotSession.SessionDetachResponse.class)))
                 .thenReturn(CompletableFuture.completedFuture(new CopilotSession.SessionDetachResponse(true, null)));
-        session = new CopilotSession("test-session-id", rpc);
+        session = createTestSession(rpc);
 
         try {
             var pending = session.sendAndWait(new MessageOptions().setPrompt("keep going"));
@@ -284,7 +288,7 @@ public class SessionEventHandlingTest {
                 .thenReturn(CompletableFuture.completedFuture(new SendMessageResponse("message-1")));
         when(rpc.invoke(eq("session.detach"), any(), eq(CopilotSession.SessionDetachResponse.class)))
                 .thenReturn(CompletableFuture.completedFuture(new CopilotSession.SessionDetachResponse(true, null)));
-        session = new CopilotSession("test-session-id", rpc);
+        session = createTestSession(rpc);
 
         try {
             var received = new ArrayList<SessionEvent>();

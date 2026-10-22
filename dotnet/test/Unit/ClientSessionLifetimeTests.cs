@@ -24,6 +24,31 @@ public sealed partial class ClientSessionLifetimeTests
 {
     private sealed record RpcRequestRecord(string Method, JsonElement Params);
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LegacyPingFallback_RequiresNoEntraConfiguration(bool entra)
+    {
+        await using var server = await FakeCopilotServer.StartAsync();
+        server.RejectConnect = true;
+        await using var client = new CopilotClient(new CopilotClientOptions
+        {
+            Connection = RuntimeConnection.ForUri(server.Url),
+            Entra = entra ? new EntraAuthConfig { ClientId = "host-entra-client" } : null
+        });
+        if (entra)
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => client.StartAsync());
+            Assert.Contains("does not support Entra client configuration", error.Message);
+            Assert.DoesNotContain(server.Requests, r => r.Method == "ping");
+        }
+        else
+        {
+            await client.StartAsync();
+            Assert.Single(server.Requests, r => r.Method == "ping");
+        }
+    }
+
     [Fact]
     public async Task TypedHookDispatch_RetainsChildIdentityAndOldRootInputs()
     {
@@ -108,11 +133,19 @@ public sealed partial class ClientSessionLifetimeTests
     [InlineData(true, null, false)]
     [InlineData(false, false, true)]
     [InlineData(true, true, false)]
-    public async Task ImageGeneration_ForwardsCreateAndResumeOptIn(bool resume, bool? enabled, bool? watermark = null)
+    [InlineData(false, null, null, true)]
+    [InlineData(false, null, null, false)]
+    [InlineData(true, null, null, true)]
+    [InlineData(true, null, null, false)]
+    [InlineData(false, true, false, true)]
+    [InlineData(true, false, true, false)]
+    public async Task ImageGeneration_ForwardsCreateAndResumeOptIn(bool resume, bool? enabled, bool? watermark = null, bool? saveToDisk = null)
     {
         await using var server = await FakeCopilotServer.StartAsync();
         await using var client = new CopilotClient(new CopilotClientOptions { Connection = RuntimeConnection.ForUri(server.Url) });
-        var imageGeneration = enabled is null && watermark is null ? null : new ImageGenerationConfig { Enabled = enabled, Watermark = watermark };
+        var imageGeneration = enabled is null && watermark is null && saveToDisk is null
+            ? null
+            : new ImageGenerationConfig { Enabled = enabled, Watermark = watermark, SaveToDisk = saveToDisk };
         await using var session = resume
             ? await client.ResumeSessionAsync("image-test", new ResumeSessionConfig
             {
@@ -125,7 +158,7 @@ public sealed partial class ClientSessionLifetimeTests
                 ImageGeneration = imageGeneration
             }.Clone());
         var request = Assert.Single(server.Requests, r => r.Method == (resume ? "session.resume" : "session.create")).Params;
-        if (enabled is null && watermark is null)
+        if (enabled is null && watermark is null && saveToDisk is null)
         {
             Assert.False(request.TryGetProperty("imageGeneration", out _), request.ToString());
         }
@@ -147,6 +180,14 @@ public sealed partial class ClientSessionLifetimeTests
             else
             {
                 Assert.Equal(watermark.Value, options.GetProperty("watermark").GetBoolean());
+            }
+            if (saveToDisk is null)
+            {
+                Assert.False(options.TryGetProperty("saveToDisk", out _));
+            }
+            else
+            {
+                Assert.Equal(saveToDisk.Value, options.GetProperty("saveToDisk").GetBoolean());
             }
         }
     }
@@ -4256,6 +4297,7 @@ public sealed partial class ClientSessionLifetimeTests
         private readonly TaskCompletionSource _destroyStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _allowDestroy = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Task _serverTask;
+        private readonly List<Task> _sendCompletionTasks = [];
         private readonly List<RpcRequestRecord> _requests = [];
         private readonly ConcurrentQueue<object?> _sessionEvents = new();
         private readonly object _requestsLock = new();
@@ -4271,6 +4313,7 @@ public sealed partial class ClientSessionLifetimeTests
         private bool _reconnectObserved;
         private int _nextMessageId;
         public bool IncludeTranscriptRecovery { get; set; }
+        public bool RejectConnect { get; set; }
 
         public string? LastSessionId => _lastSessionId;
         public bool UniqueMessageIds { get; set; }
@@ -4279,6 +4322,7 @@ public sealed partial class ClientSessionLifetimeTests
         public bool ReconnectObserved => Volatile.Read(ref _reconnectObserved);
 
         public Func<string, Task>? BeforeSendResponse { get; set; }
+        public Func<RpcRequestRecord, CancellationToken, Task<object?>>? SendCompletion { get; set; }
 
         private FakeCopilotServer(TcpListener listener)
         {
@@ -4460,6 +4504,14 @@ public sealed partial class ClientSessionLifetimeTests
             {
             }
 
+            try
+            {
+                await Task.WhenAll(_sendCompletionTasks);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or IOException or SocketException)
+            {
+            }
+
             _cts.Dispose();
             _writeLock.Dispose();
         }
@@ -4479,9 +4531,16 @@ public sealed partial class ClientSessionLifetimeTests
                 }
 
                 var root = message.RootElement;
-                if (root.TryGetProperty("method", out _))
+                if (root.TryGetProperty("method", out var method))
                 {
-                    await HandleRequestAsync(stream, root, _cts.Token);
+                    if (method.GetString() == "session.sendAndWait" && SendCompletion is not null)
+                    {
+                        _sendCompletionTasks.Add(HandleRequestAsync(stream, root.Clone(), _cts.Token));
+                    }
+                    else
+                    {
+                        await HandleRequestAsync(stream, root, _cts.Token);
+                    }
                     continue;
                 }
 
@@ -4536,6 +4595,42 @@ public sealed partial class ClientSessionLifetimeTests
                 _requests.Add(new RpcRequestRecord(method!, paramsElement));
             }
             RequestsChanged.Pulse();
+            if (method == "connect" && RejectConnect)
+            {
+                await WriteMessageAsync(stream, new Dictionary<string, object?>
+                {
+                    ["jsonrpc"] = "2.0",
+                    ["id"] = id,
+                    ["error"] = new Dictionary<string, object?>
+                    {
+                        ["code"] = -32601,
+                        ["message"] = "Method not found"
+                    }
+                }, cancellationToken);
+                return;
+            }
+            if (method == "session.sendAndWait")
+            {
+                var response = new Dictionary<string, object?>
+                {
+                    ["jsonrpc"] = "2.0",
+                    ["id"] = id,
+                };
+                if (SendCompletion is { } complete)
+                {
+                    response["result"] = await complete(new RpcRequestRecord(method, paramsElement), cancellationToken);
+                }
+                else
+                {
+                    response["error"] = new Dictionary<string, object?>
+                    {
+                        ["code"] = -32601,
+                        ["message"] = "Method not found",
+                    };
+                }
+                await WriteMessageAsync(stream, response, cancellationToken);
+                return;
+            }
             if (method == "session.create" && _failSessionCreate)
             {
                 _failSessionCreate = false;
@@ -4592,7 +4687,7 @@ public sealed partial class ClientSessionLifetimeTests
             }
             object? result = method switch
             {
-                "connect" => new Dictionary<string, object?>
+                "connect" or "ping" => new Dictionary<string, object?>
                 {
                     ["ok"] = true,
                     ["protocolVersion"] = 3,

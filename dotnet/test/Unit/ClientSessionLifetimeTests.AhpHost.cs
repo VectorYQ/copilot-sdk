@@ -35,7 +35,7 @@ public sealed partial class ClientSessionLifetimeTests
         await using var server = await FakeCopilotServer.StartAsync();
         await using var client = new CopilotClient(new() { Connection = RuntimeConnection.ForUri(server.Url) });
         await Assert.ThrowsAsync<ArgumentNullException>(() => client.StartAhpHostAsync(null!));
-        await Assert.ThrowsAsync<ArgumentException>(() => client.StartAhpHostAsync(new()));
+        await Assert.ThrowsAsync<ArgumentException>(() => client.StartAhpHostAsync(new() { Authentication = new AhpHostAuthentication.GitHub() }));
         Assert.Empty(server.Requests);
     }
 
@@ -44,7 +44,7 @@ public sealed partial class ClientSessionLifetimeTests
     {
         await using var server = await FakeCopilotServer.StartAsync();
         await using var client = new CopilotClient(new() { Connection = RuntimeConnection.ForUri(server.Url) });
-        await using var host = await client.StartAhpHostAsync(new() { LocalServer = new() });
+        await using var host = await client.StartAhpHostAsync(new() { Authentication = new AhpHostAuthentication.GitHub(), LocalServer = new() });
         var calls = 0;
         server.ResponseFactory = request =>
         {
@@ -75,6 +75,7 @@ public sealed partial class ClientSessionLifetimeTests
         await using var client = new CopilotClient(new() { Connection = RuntimeConnection.ForUri(server.Url) });
         await using var host = await client.StartAhpHostAsync(new()
         {
+            Authentication = new AhpHostAuthentication.GitHub(),
             GitHubEnvironment = new() { Name = name, ComputeId = computeId }
         });
         var request = Assert.Single(server.Requests, request => request.Method == "host.start").Params;
@@ -100,7 +101,7 @@ public sealed partial class ClientSessionLifetimeTests
         };
         var local = new HostLocalServerOptions { Hostname = "127.0.0.1", Port = 0, Token = "original", RequireConnectionToken = true };
         var github = new HostGitHubEnvironmentOptions { Name = "original", ComputeId = "compute", RequireConnectionBinding = false };
-        var pending = client.StartAhpHostAsync(new() { LocalServer = local, GitHubEnvironment = github });
+        var pending = client.StartAhpHostAsync(new() { Authentication = new AhpHostAuthentication.GitHub(), LocalServer = local, GitHubEnvironment = github });
         await connecting.Task.WaitAsync(TimeSpan.FromSeconds(10));
         try
         {
@@ -139,6 +140,7 @@ public sealed partial class ClientSessionLifetimeTests
         await using var client = new CopilotClient(new() { Connection = RuntimeConnection.ForUri(server.Url) });
         await using var host = await client.StartAhpHostAsync(new()
         {
+            Authentication = new AhpHostAuthentication.GitHub(),
             ComputeId = "compute",
             LocalServer = local ? new() { Hostname = "127.0.0.1", Port = 0, Token = "test-token", RequireConnectionToken = true } : null,
             GitHubEnvironment = github ? new() { Name = "test host", ComputeId = "compute" } : null
@@ -210,7 +212,7 @@ public sealed partial class ClientSessionLifetimeTests
     {
         await using var server = await FakeCopilotServer.StartAsync();
         await using var client = new CopilotClient(new() { Connection = RuntimeConnection.ForUri(server.Url) });
-        await using var host = await client.StartAhpHostAsync(new() { LocalServer = new() });
+        await using var host = await client.StartAhpHostAsync(new() { Authentication = new AhpHostAuthentication.GitHub(), LocalServer = new() });
 
         var result = await host.ListSessionsAsync();
 
@@ -231,6 +233,7 @@ public sealed partial class ClientSessionLifetimeTests
         var factory = new TaskCompletionSource<CopilotSession>();
         var host = await client.StartAhpHostAsync(new()
         {
+            Authentication = new AhpHostAuthentication.GitHub(),
             LocalServer = new(),
             CreateSession = request => { entered.TrySetResult(request.CancellationToken); return factory.Task; }
         });
@@ -238,6 +241,7 @@ public sealed partial class ClientSessionLifetimeTests
         {
             ["hostId"] = host.HostId,
             ["handoffId"] = "cancelled",
+            ["authentication"] = new Dictionary<string, object?> { ["mode"] = "github", ["identity"] = "123" },
             ["config"] = new Dictionary<string, object?> { ["sessionId"] = "requested" }
         });
         var token = await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -280,7 +284,7 @@ public sealed partial class ClientSessionLifetimeTests
                 disposed.TrySetResult(request.Params.GetProperty("hostId").GetString()!);
         };
         using var cancellation = new CancellationTokenSource();
-        var pending = client.StartAhpHostAsync(new() { LocalServer = new() }, cancellation.Token);
+        var pending = client.StartAhpHostAsync(new() { Authentication = new AhpHostAuthentication.GitHub(), LocalServer = new() }, cancellation.Token);
         var hostId = await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
@@ -298,6 +302,7 @@ public sealed partial class ClientSessionLifetimeTests
         var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var host = await client.StartAhpHostAsync(new()
         {
+            Authentication = new AhpHostAuthentication.GitHub(),
             LocalServer = new(),
             OnExit = report => { exits.Enqueue(report); exited.TrySetResult(); return Task.CompletedTask; }
         });
@@ -327,6 +332,7 @@ public sealed partial class ClientSessionLifetimeTests
         var releaseCount = 0;
         var host = await client.StartAhpHostAsync(new()
         {
+            Authentication = new AhpHostAuthentication.GitHub(),
             LocalServer = new(),
             CreateSession = async request =>
             {
@@ -368,6 +374,7 @@ public sealed partial class ClientSessionLifetimeTests
         {
             ["hostId"] = host.HostId,
             ["handoffId"] = "handoff",
+            ["authentication"] = new Dictionary<string, object?> { ["mode"] = "github", ["identity"] = "123" },
             ["resume"] = resume,
             ["config"] = config
         });
@@ -395,6 +402,7 @@ public sealed partial class ClientSessionLifetimeTests
         AhpHost? host = null;
         host = await client.StartAhpHostAsync(new()
         {
+            Authentication = new AhpHostAuthentication.GitHub(),
             LocalServer = new(),
             CreateSession = async request =>
             {
@@ -422,6 +430,7 @@ public sealed partial class ClientSessionLifetimeTests
             {
                 ["hostId"] = host.HostId,
                 ["handoffId"] = "callback",
+                ["authentication"] = new Dictionary<string, object?> { ["mode"] = "github", ["identity"] = "123" },
                 ["config"] = new Dictionary<string, object?> { ["sessionId"] = "callback" }
             });
             await server.SendRequestAsync("host.sessionReleased", new() { ["hostId"] = host.HostId, ["handoffId"] = "callback" })
@@ -445,6 +454,7 @@ public sealed partial class ClientSessionLifetimeTests
         await using var client = new CopilotClient(new() { Connection = RuntimeConnection.ForUri(server.Url) });
         var host = await client.StartAhpHostAsync(new()
         {
+            Authentication = new AhpHostAuthentication.GitHub(),
             LocalServer = new(),
             ResumeSession = request =>
             {
@@ -461,6 +471,7 @@ public sealed partial class ClientSessionLifetimeTests
         {
             ["hostId"] = host.HostId,
             ["handoffId"] = "changed",
+            ["authentication"] = new Dictionary<string, object?> { ["mode"] = "github", ["identity"] = "123" },
             ["resume"] = true,
             ["config"] = new Dictionary<string, object?> { ["sessionId"] = "changed", [setting] = expected }
         }));
@@ -478,6 +489,7 @@ public sealed partial class ClientSessionLifetimeTests
         var released = new TaskCompletionSource<CopilotSession>(TaskCreationOptions.RunContinuationsAsynchronously);
         var host = await client.StartAhpHostAsync(new()
         {
+            Authentication = new AhpHostAuthentication.GitHub(),
             LocalServer = new(),
             CreateSession = request => { entered.TrySetResult(request.CancellationToken); return factory.Task; },
             OnSessionReleased = session => { released.TrySetResult(session); return Task.CompletedTask; }
@@ -486,6 +498,7 @@ public sealed partial class ClientSessionLifetimeTests
         {
             ["hostId"] = host.HostId,
             ["handoffId"] = "pending",
+            ["authentication"] = new Dictionary<string, object?> { ["mode"] = "github", ["identity"] = "123" },
             ["config"] = new Dictionary<string, object?> { ["sessionId"] = "late" }
         };
         var pending = server.SendRequestAsync("host.materializeSession", parameters);
@@ -509,6 +522,7 @@ public sealed partial class ClientSessionLifetimeTests
         var released = new TaskCompletionSource<CopilotSession>(TaskCreationOptions.RunContinuationsAsynchronously);
         var host = await client.StartAhpHostAsync(new()
         {
+            Authentication = new AhpHostAuthentication.GitHub(),
             LocalServer = new(),
             CreateSession = async request =>
             {
@@ -522,6 +536,7 @@ public sealed partial class ClientSessionLifetimeTests
         {
             ["hostId"] = host.HostId,
             ["handoffId"] = "create",
+            ["authentication"] = new Dictionary<string, object?> { ["mode"] = "github", ["identity"] = "123" },
             ["config"] = new Dictionary<string, object?> { ["sessionId"] = "retained", ["workingDirectory"] = "/selected" }
         };
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => server.SendRequestAsync("host.materializeSession", parameters));

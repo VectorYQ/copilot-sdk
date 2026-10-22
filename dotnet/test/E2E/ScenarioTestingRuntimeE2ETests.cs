@@ -45,7 +45,6 @@ public class ScenarioTestingRuntimeE2ETests(E2ETestFixture fixture, ITestOutputH
                 UseLoggedInUser = false,
                 LogLevel = CopilotLogLevel.Debug,
                 SessionIdleTimeoutSeconds = 23,
-                EnableRemoteSessions = true,
                 Telemetry = new TelemetryConfig
                 {
                     OtlpEndpoint = "http://127.0.0.1:4318",
@@ -82,7 +81,7 @@ public class ScenarioTestingRuntimeE2ETests(E2ETestFixture fixture, ITestOutputH
         var requests = root.GetProperty("requests").EnumerateArray().ToList();
 
         Assert.Contains("--stdio", args);
-        Assert.Contains("--remote", args);
+        Assert.DoesNotContain("--remote", args);
         AssertArgumentValue(args, "--log-level", "debug");
         AssertArgumentValue(args, "--auth-token-env", "COPILOT_SDK_AUTH_TOKEN");
         AssertArgumentValue(args, "--session-idle-timeout", "23");

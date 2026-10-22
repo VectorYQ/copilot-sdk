@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/github/copilot-sdk/go/internal/jsonrpc2"
 	"github.com/github/copilot-sdk/go/rpc"
@@ -19,19 +21,52 @@ import (
 // Experimental: AHP hosting may change or be removed.
 type AhpHostExit = rpc.HostExitedNotification
 
+// AhpSessionAuthentication is the host-verified admission context, not an inference credential.
+// Experimental: AHP hosting may change or be removed.
+type AhpSessionAuthentication = rpc.HostSessionAuthentication
+type AhpSessionAuthenticationCustom = rpc.HostSessionAuthenticationCustom
+type AhpSessionAuthenticationGitHub = rpc.HostSessionAuthenticationGitHub
+type AhpSessionAuthenticationNone = rpc.HostSessionAuthenticationNone
+
+// AhpAuthenticationResult accepts a custom credential for the exact configured
+// identity until the required future RFC3339 ExpiresAt. A nil result rejects it.
+// Experimental: AHP hosting may change or be removed.
+type AhpAuthenticationResult = rpc.HostAuthenticationResult
+
+type AhpHostAuthenticationMode = rpc.HostAuthenticationMode
+
+const (
+	AhpHostAuthenticationModeGitHub = rpc.HostAuthenticationModeGitHub
+	AhpHostAuthenticationModeCustom = rpc.HostAuthenticationModeCustom
+	AhpHostAuthenticationModeNone   = rpc.HostAuthenticationModeNone
+)
+
+// AhpHostAuthentication explicitly selects github, custom, or none admission.
+// Custom requires a stable nonempty RequireIdentity and Authenticate callback.
+// The callback receives a decrypted admission token, never an inference credential;
+// its context is cancelled when validation ends. Callbacks are captured at startup.
+// Experimental: AHP hosting may change or be removed.
+type AhpHostAuthentication struct {
+	Mode            AhpHostAuthenticationMode
+	RequireIdentity string
+	Authenticate    func(context.Context, string) (*AhpAuthenticationResult, error)
+}
+
 // AhpSessionCreateRequest contains the settings selected by the AHP host.
 // Preserve Config when creating the session; add application prompts, tools and callbacks.
 // Experimental: AHP hosting may change or be removed.
 type AhpSessionCreateRequest struct {
-	Config *SessionConfig
+	Authentication AhpSessionAuthentication
+	Config         *SessionConfig
 }
 
 // AhpSessionResumeRequest identifies a durable application session to resume.
 // Preserve Config, or return the exact retained original from the owning client.
 // Experimental: AHP hosting may change or be removed.
 type AhpSessionResumeRequest struct {
-	SessionID string
-	Config    *ResumeSessionConfig
+	Authentication AhpSessionAuthentication
+	SessionID      string
+	Config         *ResumeSessionConfig
 }
 
 // AhpHostOptions configures an experimental, in-process AHP listener.
@@ -41,17 +76,22 @@ type AhpSessionResumeRequest struct {
 // At least one transport must be supplied. Both may be enabled.
 // Experimental: AHP hosting may change or be removed.
 type AhpHostOptions struct {
+	// Authentication is required in every client mode, even for anonymous access.
+	Authentication AhpHostAuthentication
 	// ComputeID selects a durable catalog identity; defaults are runtime-owned.
 	// It must agree with GitHubEnvironment.ComputeID when both are supplied.
 	ComputeID *string
 	// LocalServer explicitly enables the local WebSocket listener.
 	LocalServer *rpc.HostLocalServerOptions
-	// GitHubEnvironment registers the host with Mission Control; Name and ComputeID are required.
+	// GitHubEnvironment registers the host with Mission Control; Name, ComputeID,
+	// and github authentication are required.
 	GitHubEnvironment *rpc.HostGitHubEnvironmentOptions
-	CreateSession     func(context.Context, AhpSessionCreateRequest) (*Session, error)
-	ResumeSession     func(context.Context, AhpSessionResumeRequest) (*Session, error)
-	OnSessionReleased func(*Session) error
-	OnExit            func(AhpHostExit) error
+	// AllowCreatingNewSessions controls remote admissions. Nil selects the denied default.
+	AllowCreatingNewSessions *bool
+	CreateSession            func(context.Context, AhpSessionCreateRequest) (*Session, error)
+	ResumeSession            func(context.Context, AhpSessionResumeRequest) (*Session, error)
+	OnSessionReleased        func(*Session) error
+	OnExit                   func(AhpHostExit) error
 }
 
 // AhpHost is an experimental listener owned by one SDK connection.
@@ -76,6 +116,15 @@ func (h *AhpHost) Dispose(ctx context.Context) error {
 	return err
 }
 
+// SetAllowCreatingNewSessions changes subsequent remote admissions without disconnecting
+// clients. Already-admitted creation may finish.
+func (h *AhpHost) SetAllowCreatingNewSessions(ctx context.Context, allowed bool) error {
+	_, err := h.rpc.SetSessionCreationPolicy(ctx, &rpc.HostSetSessionCreationPolicyRequest{
+		HostID: h.HostID, AllowCreatingNewSessions: allowed,
+	})
+	return err
+}
+
 // PublishSession durably advertises the exact attached session in the compute-scoped catalog.
 // It does not invoke factories or transfer ownership.
 func (h *AhpHost) PublishSession(ctx context.Context, sessionID string) (*rpc.HostPublishSessionResult, error) {
@@ -95,9 +144,16 @@ func (h *AhpHost) ListSessions(ctx context.Context) (*rpc.HostListSessionsResult
 }
 
 type ahpHostState struct {
-	mu       sync.Mutex
-	hosts    map[string]AhpHostOptions
-	handoffs map[string]*ahpHandoff
+	mu              sync.Mutex
+	hosts           map[string]AhpHostOptions
+	handoffs        map[string]*ahpHandoff
+	authentications map[string]*ahpAuthentication
+}
+
+type ahpAuthentication struct {
+	hostID string
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 type ahpHandoff struct {
@@ -121,6 +177,23 @@ func (c *Client) StartAhpHost(ctx context.Context, options *AhpHostOptions) (*Ah
 	if options == nil || (options.LocalServer == nil && options.GitHubEnvironment == nil) {
 		return nil, errors.New("AHP hosting requires localServer or githubEnvironment")
 	}
+	var authentication rpc.HostAuthentication
+	switch options.Authentication.Mode {
+	case rpc.HostAuthenticationModeGitHub:
+		authentication = rpc.HostAuthenticationGitHub{}
+	case rpc.HostAuthenticationModeNone:
+		authentication = rpc.HostAuthenticationNone{}
+	case rpc.HostAuthenticationModeCustom:
+		if strings.TrimSpace(options.Authentication.RequireIdentity) == "" || options.Authentication.Authenticate == nil {
+			return nil, errors.New("custom authentication requires a nonempty requireIdentity and authenticate callback")
+		}
+		authentication = rpc.HostAuthenticationCustom{RequireIdentity: options.Authentication.RequireIdentity}
+	default:
+		return nil, errors.New("an explicit authentication mode is required")
+	}
+	if options.Authentication.Mode != rpc.HostAuthenticationModeGitHub && options.GitHubEnvironment != nil {
+		return nil, errors.New("githubEnvironment requires github authentication")
+	}
 	if err := c.ensureConnected(ctx); err != nil {
 		return nil, err
 	}
@@ -140,12 +213,15 @@ func (c *Client) StartAhpHost(ctx context.Context, options *AhpHostOptions) (*Ah
 	if c.ahp.hosts == nil {
 		c.ahp.hosts = make(map[string]AhpHostOptions)
 		c.ahp.handoffs = make(map[string]*ahpHandoff)
+		c.ahp.authentications = make(map[string]*ahpAuthentication)
 	}
 	c.ahp.hosts[hostID] = opts
 	c.ahp.mu.Unlock()
 	params := &rpc.HostStartRequest{
-		HostID: hostID, ComputeID: opts.ComputeID, LocalServer: opts.LocalServer,
-		GitHubEnvironment: opts.GitHubEnvironment,
+		Authentication: authentication,
+		HostID:         hostID, ComputeID: opts.ComputeID, LocalServer: opts.LocalServer,
+		GitHubEnvironment:        opts.GitHubEnvironment,
+		AllowCreatingNewSessions: opts.AllowCreatingNewSessions,
 	}
 	if opts.CreateSession != nil {
 		params.SessionFactory = Bool(true)
@@ -188,6 +264,11 @@ func (c *Client) releaseAhpHost(hostID string) (AhpHostOptions, bool) {
 	c.ahp.mu.Lock()
 	options, exists := c.ahp.hosts[hostID]
 	delete(c.ahp.hosts, hostID)
+	for _, entry := range c.ahp.authentications {
+		if entry.hostID == hostID {
+			entry.cancel()
+		}
+	}
 	var handoffs []string
 	for id, entry := range c.ahp.handoffs {
 		if entry.hostID == hostID {
@@ -347,9 +428,42 @@ func containsAhpConfig(actual, expected any, root bool) bool {
 	return reflect.DeepEqual(actual, expected)
 }
 
+func validateAhpTrustedAuthentication(policy AhpHostAuthentication, trusted AhpSessionAuthentication) error {
+	invalid := errors.New("AHP trusted authentication does not match host policy")
+	if string(trusted.Mode()) != string(policy.Mode) {
+		return invalid
+	}
+	switch value := trusted.(type) {
+	case AhpSessionAuthenticationNone, *AhpSessionAuthenticationNone:
+		return nil
+	case AhpSessionAuthenticationGitHub:
+		if strings.TrimSpace(value.Identity) == "" {
+			return invalid
+		}
+	case *AhpSessionAuthenticationGitHub:
+		if value == nil || strings.TrimSpace(value.Identity) == "" {
+			return invalid
+		}
+	case AhpSessionAuthenticationCustom:
+		if value.Identity != policy.RequireIdentity {
+			return invalid
+		}
+	case *AhpSessionAuthenticationCustom:
+		if value == nil || value.Identity != policy.RequireIdentity {
+			return invalid
+		}
+	default:
+		return invalid
+	}
+	return nil
+}
+
 func (c *Client) materializeAhpSession(params *rpc.HostSessionCreateCallback) (*rpc.HostSessionCreateResult, *jsonrpc2.Error) {
 	fail := func(err error) (*rpc.HostSessionCreateResult, *jsonrpc2.Error) {
 		return nil, &jsonrpc2.Error{Code: jsonrpc2.ErrInternal.Code, Message: err.Error()}
+	}
+	if params.Authentication == nil {
+		return fail(errors.New("AHP session handoff authentication is required"))
 	}
 	resume := params.Resume != nil && *params.Resume
 	sessionID, _ := params.Config["sessionId"].(string)
@@ -359,6 +473,10 @@ func (c *Client) materializeAhpSession(params *rpc.HostSessionCreateCallback) (*
 		(resume && options.ResumeSession == nil) || (!resume && options.CreateSession == nil) || sessionID == "" {
 		c.ahp.mu.Unlock()
 		return fail(errors.New("AHP session factory is unavailable or handoff already exists"))
+	}
+	if err := validateAhpTrustedAuthentication(options.Authentication, params.Authentication); err != nil {
+		c.ahp.mu.Unlock()
+		return fail(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	entry := &ahpHandoff{
@@ -370,7 +488,7 @@ func (c *Client) materializeAhpSession(params *rpc.HostSessionCreateCallback) (*
 
 	done := make(chan error, 1)
 	go func() {
-		session, err := invokeAhpFactory(entry, params.Config, resume)
+		session, err := invokeAhpFactory(entry, params.Config, params.Authentication, resume)
 		if err == nil {
 			c.sessionsMux.Lock()
 			owned := session != nil && session.SessionID == sessionID && c.sessions[sessionID] == session
@@ -439,7 +557,7 @@ func (c *Client) materializeAhpSession(params *rpc.HostSessionCreateCallback) (*
 	}
 }
 
-func invokeAhpFactory(entry *ahpHandoff, config map[string]any, resume bool) (session *Session, err error) {
+func invokeAhpFactory(entry *ahpHandoff, config map[string]any, authentication AhpSessionAuthentication, resume bool) (session *Session, err error) {
 	defer func() {
 		if failure := recover(); failure != nil {
 			err = fmt.Errorf("AHP session factory panicked: %v", failure)
@@ -450,11 +568,93 @@ func invokeAhpFactory(entry *ahpHandoff, config map[string]any, resume bool) (se
 		if err := decodeAhpConfig(config, &options); err != nil {
 			return nil, err
 		}
-		return entry.options.ResumeSession(entry.ctx, AhpSessionResumeRequest{SessionID: entry.sessionID, Config: &options})
+		return entry.options.ResumeSession(entry.ctx, AhpSessionResumeRequest{Authentication: authentication, SessionID: entry.sessionID, Config: &options})
 	}
 	var options SessionConfig
 	if err := decodeAhpConfig(config, &options); err != nil {
 		return nil, err
 	}
-	return entry.options.CreateSession(entry.ctx, AhpSessionCreateRequest{Config: &options})
+	return entry.options.CreateSession(entry.ctx, AhpSessionCreateRequest{Authentication: authentication, Config: &options})
+}
+
+func (c *Client) cancelAhpAuthentication(params *rpc.HostAuthenticationCancelledNotification) {
+	c.ahp.mu.Lock()
+	defer c.ahp.mu.Unlock()
+	if entry := c.ahp.authentications[params.RequestID]; entry != nil && entry.hostID == params.HostID {
+		entry.cancel()
+	}
+}
+
+func (c *Client) prepareAhpAuthentication(params *rpc.HostValidateAuthenticationRequest) *jsonrpc2.Error {
+	c.ahp.mu.Lock()
+	defer c.ahp.mu.Unlock()
+	options, exists := c.ahp.hosts[params.HostID]
+	if !exists || options.Authentication.Mode != rpc.HostAuthenticationModeCustom || c.ahp.authentications[params.RequestID] != nil {
+		return &jsonrpc2.Error{Code: jsonrpc2.ErrInternal.Code, Message: "AHP authenticator is unavailable or request already exists"}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	c.ahp.authentications[params.RequestID] = &ahpAuthentication{hostID: params.HostID, ctx: ctx, cancel: cancel}
+	return nil
+}
+
+func (c *Client) validateAhpAuthentication(params *rpc.HostValidateAuthenticationRequest) (*AhpAuthenticationResult, *jsonrpc2.Error) {
+	fail := func(err error) (*AhpAuthenticationResult, *jsonrpc2.Error) {
+		return nil, &jsonrpc2.Error{Code: jsonrpc2.ErrInternal.Code, Message: err.Error()}
+	}
+	c.ahp.mu.Lock()
+	options, exists := c.ahp.hosts[params.HostID]
+	entry := c.ahp.authentications[params.RequestID]
+	c.ahp.mu.Unlock()
+	if entry == nil || entry.hostID != params.HostID {
+		return fail(errors.New("AHP authenticator is unavailable"))
+	}
+	ctx, cancel := entry.ctx, entry.cancel
+	defer func() {
+		c.ahp.mu.Lock()
+		if c.ahp.authentications[params.RequestID] == entry {
+			delete(c.ahp.authentications, params.RequestID)
+		}
+		cancel()
+		c.ahp.mu.Unlock()
+	}()
+	if !exists || ctx.Err() != nil {
+		return fail(errors.New("AHP authentication ended"))
+	}
+	type outcome struct {
+		result *AhpAuthenticationResult
+		err    error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		var result outcome
+		defer func() {
+			if failure := recover(); failure != nil {
+				result.err = fmt.Errorf("AHP authenticator panicked: %v", failure)
+			}
+			done <- result
+		}()
+		result.result, result.err = options.Authentication.Authenticate(ctx, params.Token)
+	}()
+	select {
+	case <-ctx.Done():
+		return fail(errors.New("AHP authentication ended"))
+	case result := <-done:
+		c.ahp.mu.Lock()
+		_, active := c.ahp.hosts[params.HostID]
+		ended := ctx.Err() != nil || !active
+		c.ahp.mu.Unlock()
+		if ended {
+			return fail(errors.New("AHP authentication ended"))
+		}
+		if result.err != nil {
+			return fail(result.err)
+		}
+		if result.result != nil {
+			expiration, err := time.Parse(time.RFC3339, strings.ToUpper(result.result.ExpiresAt))
+			if result.result.Identity != options.Authentication.RequireIdentity || err != nil || !expiration.After(time.Now()) {
+				return fail(errors.New("AHP authentication requires the configured identity and a future RFC3339 expiration"))
+			}
+		}
+		return result.result, nil
+	}
 }

@@ -23,8 +23,12 @@ final class AhpTestClient implements AutoCloseable {
     private final BufferedWriter input;
 
     AhpTestClient(Path sdkRoot) throws Exception {
-        process = new ProcessBuilder("node", "--import", "tsx", "test/e2e/harness/ahpTestDriver.ts")
-                .directory(sdkRoot.resolve("nodejs").toFile()).redirectError(ProcessBuilder.Redirect.INHERIT).start();
+        this(sdkRoot, "test/e2e/harness/ahpTestDriver.ts");
+    }
+
+    AhpTestClient(Path sdkRoot, String driver) throws Exception {
+        process = new ProcessBuilder("node", "--import", "tsx", driver).directory(sdkRoot.resolve("nodejs").toFile())
+                .redirectError(ProcessBuilder.Redirect.INHERIT).start();
         output = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
         input = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
         try {

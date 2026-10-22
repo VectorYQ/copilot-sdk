@@ -835,7 +835,7 @@ impl JsonRpcClient {
                         }
                         if matches!(
                             notification.method.as_str(),
-                            "host.exited" | "host.sessionReleased"
+                            "host.exited" | "host.sessionReleased" | "host.authenticationCancelled"
                         ) && let Some(hosts) = &notifications.1
                         {
                             let _ = hosts.send(notification.clone());
@@ -1119,6 +1119,7 @@ impl JsonRpcClient {
             map: &pending_requests,
             id,
             armed: true,
+            cancel_wait: (method == "session.sendAndWait").then_some(&write_tx),
         };
 
         // The PendingGuard's drop removes the entry on every error path
@@ -1274,6 +1275,7 @@ struct PendingGuard<'a> {
     map: &'a RwLock<HashMap<u64, PendingRequest>>,
     id: u64,
     armed: bool,
+    cancel_wait: Option<&'a mpsc::UnboundedSender<WriteCommand>>,
 }
 
 impl PendingGuard<'_> {
@@ -1293,6 +1295,20 @@ impl Drop for PendingGuard<'_> {
                 .is_some_and(|request| request.sender.is_some())
             {
                 map.remove(&self.id);
+                drop(map);
+                if let Some(writer) = self.cancel_wait
+                    && let Err(error) = JsonRpcClient::enqueue_message(
+                        writer,
+                        &JsonRpcNotification {
+                            jsonrpc: "2.0".to_owned(),
+                            method: "$/cancelRequest".to_owned(),
+                            params: Some(serde_json::json!({ "id": self.id })),
+                        },
+                        None,
+                    )
+                {
+                    warn!(%error, "Failed to cancel completion request");
+                }
             }
         }
     }

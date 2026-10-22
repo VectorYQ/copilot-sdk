@@ -209,11 +209,6 @@ type ClientOptions struct {
 	// automatically cleaned up. Set to 0 or leave unset to disable.
 	// Ignored when connecting to an existing runtime via [URIConnection].
 	SessionIdleTimeoutSeconds int
-	// EnableRemoteSessions enables remote session support (Mission Control
-	// integration). When true, sessions in a GitHub repository working
-	// directory are accessible from GitHub web and mobile.
-	// Ignored when connecting to an existing runtime via [URIConnection].
-	EnableRemoteSessions bool
 	// ClientInfo declares the integrating application's identity, forwarded to the
 	// runtime on the `server.connect` handshake. Declaring it lets the
 	// telemetry the runtime emits on this connection be attributed to a
@@ -221,6 +216,10 @@ type ClientOptions struct {
 	// the runtime's own build. All fields are optional; leave it nil to keep the
 	// runtime's default attribution.
 	ClientInfo *ClientInfo
+
+	// Entra configures the host's Entra application for its sessions.
+	// Required for built-in Entra sign-in and token renewal; other authentication methods remain available.
+	Entra *rpc.EntraAuthConfig
 	// Mode controls the default tool surface and feature flags presented to
 	// sessions created by this client. The zero value ([ModeCopilotCli])
 	// matches legacy CLI defaults. Set to [ModeEmpty] to opt in to
@@ -1493,6 +1492,14 @@ type ImageGenerationConfig struct {
 	// false). Re-supply after cold resume. Does not enable image generation or
 	// enforce enterprise policy.
 	Watermark *bool `json:"watermark,omitempty"`
+	// SaveToDisk is experimental. It saves generated and edited images under the
+	// session-state directory's images folder and gives the model each path as a
+	// "saved_to:" line in the tool result. Defaults to true; set false to opt
+	// out. Subagents follow
+	// their parent's value unless they set their own. A failed save still returns
+	// the image. Sessions without a local session-state directory never save.
+	// Re-supply after cold resume. Does not enable image generation.
+	SaveToDisk *bool `json:"saveToDisk,omitempty"`
 }
 
 // ToolSearchConfig allows to configure tool search behavior.
@@ -1977,11 +1984,6 @@ type SessionConfig struct {
 	// When provided, the session authenticates as the token's owner instead of
 	// using the global client-level auth.
 	GitHubToken string `json:"-"`
-	// RemoteSession controls per-session remote behavior:
-	//   - "off" — local only, no remote export (default)
-	//   - "export" — export session events to GitHub without enabling remote steering
-	//   - "on" — export to GitHub AND enable remote steering
-	RemoteSession rpc.RemoteSessionMode
 	// Cloud creates a remote session in the cloud instead of a local session.
 	// The optional repository is associated with the cloud session.
 	Cloud *CloudSessionOptions
@@ -2586,9 +2588,6 @@ type ResumeSessionConfig struct {
 	// When provided, the session authenticates as the token's owner instead of
 	// using the global client-level auth.
 	GitHubToken string `json:"-"`
-	// RemoteSession controls per-session remote behavior.
-	// See SessionConfig.RemoteSession for details.
-	RemoteSession rpc.RemoteSessionMode
 	// SuppressResumeEvent, when true, skips emitting the session.resume event.
 	// Useful for reconnecting to a session without triggering resume-related side effects.
 	SuppressResumeEvent bool
