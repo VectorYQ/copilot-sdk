@@ -3819,7 +3819,8 @@ export class CopilotClient {
                 // Reader EOF is authoritative for messages still buffered after process exit.
                 // A descendant can keep stdout open, so bound the fallback.
                 exitFallback = setTimeout(disconnectAfterDrain, RUNTIME_SHUTDOWN_TIMEOUT_MS);
-                exitFallback.unref();
+                // Browser-style hosts such as Electron renderers return numeric timer IDs.
+                exitFallback.unref?.();
             });
         }
         this.connection.onError(() => {
