@@ -179,6 +179,9 @@ class AhpHostOptions:
     ``compute_id`` selects a durable catalog across transports; omitted local-only
     identities are persisted by the runtime. It must agree with the GitHub
     environment's compute identity when both are supplied.
+    ``workspace`` is an absolute directory on the runtime host to serve through
+    AHP. Omission uses the runtime's configured working directory; it does not
+    change process or session working directories.
     """
 
     local_server: HostLocalServerOptions | None = None
@@ -191,6 +194,7 @@ class AhpHostOptions:
     authentication: AhpHostAuthentication | None = None
     # None preserves the denied default; independent of session factories.
     allow_creating_new_sessions: bool | None = None
+    workspace: str | None = None
 
 
 def _validate_options(options: AhpHostOptions) -> None:
@@ -327,6 +331,7 @@ class _AhpHostManager:
             "hostId": host_id,
             "authentication": authentication,
             "computeId": options.compute_id,
+            "workspace": options.workspace,
             "allowCreatingNewSessions": options.allow_creating_new_sessions,
             "localServer": (
                 options.local_server.to_dict() if options.local_server is not None else None

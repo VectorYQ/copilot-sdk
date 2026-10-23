@@ -1936,6 +1936,7 @@ export class CopilotClient {
                 featureFlags: config.featureFlags,
                 expAssignments: config.expAssignments,
                 enableManagedSettings: config.enableManagedSettings,
+                excludedManagedSettings: config.excludedManagedSettings,
                 enforceManagedModelDefaults: config.enforceManagedModelDefaults,
                 interactiveUser: config.interactiveUser,
                 managedSettings: config.managedSettings,
@@ -2249,6 +2250,7 @@ export class CopilotClient {
                 featureFlags: config.featureFlags,
                 expAssignments: config.expAssignments,
                 enableManagedSettings: config.enableManagedSettings,
+                excludedManagedSettings: config.excludedManagedSettings,
                 enforceManagedModelDefaults: config.enforceManagedModelDefaults,
                 interactiveUser: config.interactiveUser,
                 managedSettings: config.managedSettings,
@@ -2367,6 +2369,7 @@ export class CopilotClient {
         }
         const {
             computeId,
+            workspace,
             allowCreatingNewSessions,
             localServer,
             githubEnvironment,
@@ -2400,6 +2403,7 @@ export class CopilotClient {
                         ? { mode: "custom", requireIdentity: authentication.requireIdentity }
                         : { mode: authentication.mode },
                 computeId,
+                workspace,
                 localServer,
                 githubEnvironment,
                 sessionFactory: createSession ? true : undefined,

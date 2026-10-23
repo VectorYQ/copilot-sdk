@@ -282,6 +282,9 @@ public final class ResumeSessionRequest {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Boolean enableManagedSettings;
 
+    @JsonProperty("excludedManagedSettings")
+    private List<String> excludedManagedSettings;
+
     @JsonProperty("enforceManagedModelDefaults")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Boolean enforceManagedModelDefaults;
@@ -1343,6 +1346,16 @@ public final class ResumeSessionRequest {
      */
     public Boolean getEnableManagedSettings() {
         return enableManagedSettings;
+    }
+
+    /** Gets excluded managed-setting paths. @return paths, or {@code null} */
+    public List<String> getExcludedManagedSettings() {
+        return excludedManagedSettings;
+    }
+
+    /** Sets excluded managed-setting paths. @param paths setting paths */
+    public void setExcludedManagedSettings(List<String> paths) {
+        this.excludedManagedSettings = paths;
     }
 
     /**
