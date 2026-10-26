@@ -18145,6 +18145,7 @@ class SessionQuotaPlanTier(Enum):
 
     Copilot plan tier used by the session quota projection.
     """
+    ACCESS = "access"
     BUSINESS = "business"
     EDU = "edu"
     ENTERPRISE = "enterprise"

@@ -32024,6 +32024,8 @@ const (
 type SessionQuotaPlanTier string
 
 const (
+	// Copilot Access.
+	SessionQuotaPlanTierAccess SessionQuotaPlanTier = "access"
 	// Copilot Business.
 	SessionQuotaPlanTierBusiness SessionQuotaPlanTier = "business"
 	// Copilot education entitlement.

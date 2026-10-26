@@ -53719,6 +53719,9 @@ pub enum SessionQuotaPlanTier {
     /// Copilot Enterprise.
     #[serde(rename = "enterprise")]
     Enterprise,
+    /// Copilot Access.
+    #[serde(rename = "access")]
+    Access,
     /// Copilot Max.
     #[serde(rename = "max")]
     Max,

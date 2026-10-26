@@ -49879,6 +49879,9 @@ public readonly struct SessionQuotaPlanTier : IEquatable<SessionQuotaPlanTier>
     /// <summary>Copilot Enterprise.</summary>
     public static SessionQuotaPlanTier Enterprise { get; } = new("enterprise");
 
+    /// <summary>Copilot Access.</summary>
+    public static SessionQuotaPlanTier Access { get; } = new("access");
+
     /// <summary>Copilot Max.</summary>
     public static SessionQuotaPlanTier Max { get; } = new("max");
 

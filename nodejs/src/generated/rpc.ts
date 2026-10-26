@@ -5967,6 +5967,8 @@ export type SessionQuotaPlanTier =
   | "business"
   /** Copilot Enterprise. */
   | "enterprise"
+  /** Copilot Access. */
+  | "access"
   /** Copilot Max. */
   | "max"
   /** The account's plan tier is not known. */
