@@ -2306,6 +2306,9 @@ type ElicitationContext struct {
 	Mode *ElicitationRequestedMode
 	// ElicitationSource is the source that initiated the request (e.g. MCP server name).
 	ElicitationSource *string
+	// ElicitationSourceDisplayName is the trusted display label of a Connector-owned
+	// MCP server that initiated the request, such as "Work IQ".
+	ElicitationSourceDisplayName *string
 	// URL to open in the user's browser (url mode only).
 	URL *string
 }

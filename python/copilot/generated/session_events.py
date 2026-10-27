@@ -5547,6 +5547,7 @@ class ElicitationRequestedData:
     message: str
     request_id: str
     elicitation_source: str | None = None
+    elicitation_source_display_name: str | None = None
     mode: ElicitationRequestedMode | None = None
     requested_schema: ElicitationRequestedSchema | None = None
     tool_call_id: str | None = None
@@ -5558,6 +5559,7 @@ class ElicitationRequestedData:
         message = from_str(obj.get("message"))
         request_id = from_str(obj.get("requestId"))
         elicitation_source = from_union([from_none, from_str], obj.get("elicitationSource"))
+        elicitation_source_display_name = from_union([from_none, from_str], obj.get("elicitationSourceDisplayName"))
         mode = from_union([from_none, lambda x: parse_enum(ElicitationRequestedMode, x)], obj.get("mode"))
         requested_schema = from_union([from_none, ElicitationRequestedSchema.from_dict], obj.get("requestedSchema"))
         tool_call_id = from_union([from_none, from_str], obj.get("toolCallId"))
@@ -5566,6 +5568,7 @@ class ElicitationRequestedData:
             message=message,
             request_id=request_id,
             elicitation_source=elicitation_source,
+            elicitation_source_display_name=elicitation_source_display_name,
             mode=mode,
             requested_schema=requested_schema,
             tool_call_id=tool_call_id,
@@ -5578,6 +5581,8 @@ class ElicitationRequestedData:
         result["requestId"] = from_str(self.request_id)
         if self.elicitation_source is not None:
             result["elicitationSource"] = from_union([from_none, from_str], self.elicitation_source)
+        if self.elicitation_source_display_name is not None:
+            result["elicitationSourceDisplayName"] = from_union([from_none, from_str], self.elicitation_source_display_name)
         if self.mode is not None:
             result["mode"] = from_union([from_none, lambda x: to_enum(ElicitationRequestedMode, x)], self.mode)
         if self.requested_schema is not None:
@@ -7823,6 +7828,7 @@ class PermissionPromptRequestMcp:
     can_offer_server_wide_approval: bool | None = None
     # Experimental: this field is part of an experimental API and may change or be removed.
     permission_recommendation: PermissionRecommendation | None = None
+    server_display_name: str | None = None
     tool_call_id: str | None = None
 
     @staticmethod
@@ -7835,6 +7841,7 @@ class PermissionPromptRequestMcp:
         assisted_approval = from_union([from_none, PermissionAssistedApproval.from_dict], obj.get("assistedApproval"))
         can_offer_server_wide_approval = from_union([from_none, from_bool], obj.get("canOfferServerWideApproval"))
         permission_recommendation = from_union([from_none, lambda x: parse_enum(PermissionRecommendation, x)], obj.get("permissionRecommendation"))
+        server_display_name = from_union([from_none, from_str], obj.get("serverDisplayName"))
         tool_call_id = from_union([from_none, from_str], obj.get("toolCallId"))
         return PermissionPromptRequestMcp(
             server_name=server_name,
@@ -7844,6 +7851,7 @@ class PermissionPromptRequestMcp:
             assisted_approval=assisted_approval,
             can_offer_server_wide_approval=can_offer_server_wide_approval,
             permission_recommendation=permission_recommendation,
+            server_display_name=server_display_name,
             tool_call_id=tool_call_id,
         )
 
@@ -7861,6 +7869,8 @@ class PermissionPromptRequestMcp:
             result["canOfferServerWideApproval"] = from_union([from_none, from_bool], self.can_offer_server_wide_approval)
         if self.permission_recommendation is not None:
             result["permissionRecommendation"] = from_union([from_none, lambda x: to_enum(PermissionRecommendation, x)], self.permission_recommendation)
+        if self.server_display_name is not None:
+            result["serverDisplayName"] = from_union([from_none, from_str], self.server_display_name)
         if self.tool_call_id is not None:
             result["toolCallId"] = from_union([from_none, from_str], self.tool_call_id)
         return result
@@ -8529,6 +8539,7 @@ class PermissionRequestMcp:
     args: Any = None
     # Experimental: this field is part of an experimental API and may change or be removed.
     permission_recommendation: PermissionRecommendation | None = None
+    server_display_name: str | None = None
     tool_call_id: str | None = None
     managed_approval_required: bool | None = None
 
@@ -8541,6 +8552,7 @@ class PermissionRequestMcp:
         tool_title = from_str(obj.get("toolTitle"))
         args = obj.get("args")
         permission_recommendation = from_union([from_none, lambda x: parse_enum(PermissionRecommendation, x)], obj.get("permissionRecommendation"))
+        server_display_name = from_union([from_none, from_str], obj.get("serverDisplayName"))
         tool_call_id = from_union([from_none, from_str], obj.get("toolCallId"))
         managed_approval_required = from_union([from_none, from_bool], obj.get("managedApprovalRequired"))
         return PermissionRequestMcp(
@@ -8550,6 +8562,7 @@ class PermissionRequestMcp:
             tool_title=tool_title,
             args=args,
             permission_recommendation=permission_recommendation,
+            server_display_name=server_display_name,
             tool_call_id=tool_call_id,
             managed_approval_required=managed_approval_required,
         )
@@ -8565,6 +8578,8 @@ class PermissionRequestMcp:
             result["args"] = self.args
         if self.permission_recommendation is not None:
             result["permissionRecommendation"] = from_union([from_none, lambda x: to_enum(PermissionRecommendation, x)], self.permission_recommendation)
+        if self.server_display_name is not None:
+            result["serverDisplayName"] = from_union([from_none, from_str], self.server_display_name)
         if self.tool_call_id is not None:
             result["toolCallId"] = from_union([from_none, from_str], self.tool_call_id)
         if self.managed_approval_required is not None:
@@ -9519,6 +9534,7 @@ class SamplingRequestedData:
     mcp_request_id: Any
     request_id: str
     server_name: str
+    server_display_name: str | None = None
 
     @staticmethod
     def from_dict(obj: Any) -> "SamplingRequestedData":
@@ -9526,10 +9542,12 @@ class SamplingRequestedData:
         mcp_request_id = obj.get("mcpRequestId")
         request_id = from_str(obj.get("requestId"))
         server_name = from_str(obj.get("serverName"))
+        server_display_name = from_union([from_none, from_str], obj.get("serverDisplayName"))
         return SamplingRequestedData(
             mcp_request_id=mcp_request_id,
             request_id=request_id,
             server_name=server_name,
+            server_display_name=server_display_name,
         )
 
     def to_dict(self) -> dict:
@@ -9537,6 +9555,8 @@ class SamplingRequestedData:
         result["mcpRequestId"] = self.mcp_request_id
         result["requestId"] = from_str(self.request_id)
         result["serverName"] = from_str(self.server_name)
+        if self.server_display_name is not None:
+            result["serverDisplayName"] = from_union([from_none, from_str], self.server_display_name)
         return result
 
 

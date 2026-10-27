@@ -10474,6 +10474,10 @@ export interface PermissionRequestMcp {
    */
   readOnly: boolean;
   /**
+   * Display label for a Connector-owned MCP server, from the trusted Connector catalog; absent for other servers. `serverName` stays the identity for approvals and rules.
+   */
+  serverDisplayName?: string;
+  /**
    * Name of the MCP server providing the tool
    */
   serverName: string;
@@ -11081,6 +11085,10 @@ export interface PermissionPromptRequestMcp {
    * @experimental
    */
   permissionRecommendation?: PermissionRecommendation;
+  /**
+   * Display label for a Connector-owned MCP server, from the trusted Connector catalog; absent for other servers. `serverName` stays the identity for approvals and rules.
+   */
+  serverDisplayName?: string;
   /**
    * Name of the MCP server providing the tool
    */
@@ -12278,6 +12286,10 @@ export interface ElicitationRequestedData {
    */
   elicitationSource?: string;
   /**
+   * Display label for a Connector-owned MCP server that initiated the request, from the trusted Connector catalog; absent for other sources. `elicitationSource` stays the identity.
+   */
+  elicitationSourceDisplayName?: string;
+  /**
    * Message describing what information is needed from the user
    */
   message: string;
@@ -12403,6 +12415,10 @@ export interface SamplingRequestedData {
    * Unique identifier for this sampling request; used to respond via session.respondToSampling()
    */
   requestId: string;
+  /**
+   * Display label for a Connector-owned MCP server, from the trusted Connector catalog; absent for other servers. `serverName` stays the identity for request matching.
+   */
+  serverDisplayName?: string;
   /**
    * Name of the MCP server that initiated the sampling request
    */

@@ -997,6 +997,8 @@ func (*ElicitationCompletedData) Type() SessionEventType { return SessionEventTy
 type ElicitationRequestedData struct {
 	// The source that initiated the request (MCP server name, or absent for agent-initiated)
 	ElicitationSource *string `json:"elicitationSource,omitempty"`
+	// Display label for a Connector-owned MCP server that initiated the request, from the trusted Connector catalog; absent for other sources. `elicitationSource` stays the identity.
+	ElicitationSourceDisplayName *string `json:"elicitationSourceDisplayName,omitempty"`
 	// Message describing what information is needed from the user
 	Message string `json:"message"`
 	// Elicitation mode; "form" for structured input, "url" for browser-based. Defaults to "form" when absent.
@@ -2798,6 +2800,8 @@ type SamplingRequestedData struct {
 	MCPRequestID any `json:"mcpRequestId"`
 	// Unique identifier for this sampling request; used to respond via session.respondToSampling()
 	RequestID string `json:"requestId"`
+	// Display label for a Connector-owned MCP server, from the trusted Connector catalog; absent for other servers. `serverName` stays the identity for request matching.
+	ServerDisplayName *string `json:"serverDisplayName,omitempty"`
 	// Name of the MCP server that initiated the sampling request
 	ServerName string `json:"serverName"`
 }
@@ -4646,6 +4650,8 @@ type PermissionPromptRequestMCP struct {
 	// Advisory runtime permission recommendation. The host remains responsible for deciding the request and may reject it.
 	// Experimental: PermissionRecommendation is part of an experimental API and may change or be removed.
 	PermissionRecommendation *PermissionRecommendation `json:"permissionRecommendation,omitempty"`
+	// Display label for a Connector-owned MCP server, from the trusted Connector catalog; absent for other servers. `serverName` stays the identity for approvals and rules.
+	ServerDisplayName *string `json:"serverDisplayName,omitempty"`
 	// Name of the MCP server providing the tool
 	ServerName string `json:"serverName"`
 	// Tool call ID that triggered this permission request
@@ -4951,6 +4957,8 @@ type PermissionRequestMCP struct {
 	PermissionRecommendation *PermissionRecommendation `json:"permissionRecommendation,omitempty"`
 	// Whether this MCP tool is read-only (no side effects)
 	ReadOnly bool `json:"readOnly"`
+	// Display label for a Connector-owned MCP server, from the trusted Connector catalog; absent for other servers. `serverName` stays the identity for approvals and rules.
+	ServerDisplayName *string `json:"serverDisplayName,omitempty"`
 	// Name of the MCP server providing the tool
 	ServerName string `json:"serverName"`
 	// Tool call ID that triggered this permission request

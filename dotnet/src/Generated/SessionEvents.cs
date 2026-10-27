@@ -7225,6 +7225,11 @@ public sealed partial class ElicitationRequestedData
     [JsonPropertyName("elicitationSource")]
     public string? ElicitationSource { get; set; }
 
+    /// <summary>Display label for a Connector-owned MCP server that initiated the request, from the trusted Connector catalog; absent for other sources. `elicitationSource` stays the identity.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonPropertyName("elicitationSourceDisplayName")]
+    public string? ElicitationSourceDisplayName { get; set; }
+
     /// <summary>Message describing what information is needed from the user.</summary>
     [JsonPropertyName("message")]
     public required string Message { get; set; }
@@ -7282,6 +7287,11 @@ public sealed partial class SamplingRequestedData
     /// <summary>Unique identifier for this sampling request; used to respond via session.respondToSampling().</summary>
     [JsonPropertyName("requestId")]
     public required string RequestId { get; set; }
+
+    /// <summary>Display label for a Connector-owned MCP server, from the trusted Connector catalog; absent for other servers. `serverName` stays the identity for request matching.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonPropertyName("serverDisplayName")]
+    public string? ServerDisplayName { get; set; }
 
     /// <summary>Name of the MCP server that initiated the sampling request.</summary>
     [JsonPropertyName("serverName")]
@@ -12724,6 +12734,11 @@ public sealed partial class PermissionRequestMcp : PermissionRequest
     [JsonPropertyName("readOnly")]
     public required bool ReadOnly { get; set; }
 
+    /// <summary>Display label for a Connector-owned MCP server, from the trusted Connector catalog; absent for other servers. `serverName` stays the identity for approvals and rules.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonPropertyName("serverDisplayName")]
+    public string? ServerDisplayName { get; set; }
+
     /// <summary>Name of the MCP server providing the tool.</summary>
     [JsonPropertyName("serverName")]
     public required string ServerName { get; set; }
@@ -13354,6 +13369,11 @@ public sealed partial class PermissionPromptRequestMcp : PermissionPromptRequest
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonPropertyName("permissionRecommendation")]
     public PermissionRecommendation? PermissionRecommendation { get; set; }
+
+    /// <summary>Display label for a Connector-owned MCP server, from the trusted Connector catalog; absent for other servers. `serverName` stays the identity for approvals and rules.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonPropertyName("serverDisplayName")]
+    public string? ServerDisplayName { get; set; }
 
     /// <summary>Name of the MCP server providing the tool.</summary>
     [JsonPropertyName("serverName")]

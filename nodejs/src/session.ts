@@ -1542,8 +1542,15 @@ export class CopilotSession {
             void this._executeCommandAndRespond(requestId, commandName, command, args);
         } else if (event.type === "elicitation.requested") {
             if (this.elicitationHandler) {
-                const { message, requestedSchema, mode, elicitationSource, url, requestId } =
-                    event.data;
+                const {
+                    message,
+                    requestedSchema,
+                    mode,
+                    elicitationSource,
+                    elicitationSourceDisplayName,
+                    url,
+                    requestId,
+                } = event.data;
                 void this._handleElicitationRequest(
                     {
                         sessionId: this.sessionId,
@@ -1551,6 +1558,7 @@ export class CopilotSession {
                         requestedSchema: requestedSchema as ElicitationContext["requestedSchema"],
                         mode,
                         elicitationSource,
+                        elicitationSourceDisplayName,
                         url,
                     },
                     requestId

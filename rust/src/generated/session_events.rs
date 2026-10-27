@@ -6585,6 +6585,9 @@ pub struct PermissionRequestMcp {
     pub permission_recommendation: Option<PermissionRecommendation>,
     /// Whether this MCP tool is read-only (no side effects)
     pub read_only: bool,
+    /// Display label for a Connector-owned MCP server, from the trusted Connector catalog; absent for other servers. `serverName` stays the identity for approvals and rules.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_display_name: Option<String>,
     /// Name of the MCP server providing the tool
     pub server_name: String,
     /// Tool call ID that triggered this permission request
@@ -7049,6 +7052,9 @@ pub struct PermissionPromptRequestMcp {
     /// </div>
     #[serde(skip_serializing_if = "Option::is_none")]
     pub permission_recommendation: Option<PermissionRecommendation>,
+    /// Display label for a Connector-owned MCP server, from the trusted Connector catalog; absent for other servers. `serverName` stays the identity for approvals and rules.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_display_name: Option<String>,
     /// Name of the MCP server providing the tool
     pub server_name: String,
     /// Tool call ID that triggered this permission request
@@ -8015,6 +8021,9 @@ pub struct ElicitationRequestedData {
     /// The source that initiated the request (MCP server name, or absent for agent-initiated)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub elicitation_source: Option<String>,
+    /// Display label for a Connector-owned MCP server that initiated the request, from the trusted Connector catalog; absent for other sources. `elicitationSource` stays the identity.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elicitation_source_display_name: Option<String>,
     /// Message describing what information is needed from the user
     pub message: String,
     /// Elicitation mode; "form" for structured input, "url" for browser-based. Defaults to "form" when absent.
@@ -8055,6 +8064,9 @@ pub struct SamplingRequestedData {
     pub mcp_request_id: serde_json::Value,
     /// Unique identifier for this sampling request; used to respond via session.respondToSampling()
     pub request_id: RequestId,
+    /// Display label for a Connector-owned MCP server, from the trusted Connector catalog; absent for other servers. `serverName` stays the identity for request matching.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_display_name: Option<String>,
     /// Name of the MCP server that initiated the sampling request
     pub server_name: String,
 }

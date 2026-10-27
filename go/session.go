@@ -2064,12 +2064,13 @@ func (s *Session) handleBroadcastEvent(event SessionEvent) {
 			return
 		}
 		s.handleElicitationRequest(ElicitationContext{
-			SessionID:         s.SessionID,
-			Message:           d.Message,
-			RequestedSchema:   fromRPCElicitationRequestedSchema(d.RequestedSchema),
-			Mode:              d.Mode,
-			ElicitationSource: d.ElicitationSource,
-			URL:               d.URL,
+			SessionID:                    s.SessionID,
+			Message:                      d.Message,
+			RequestedSchema:              fromRPCElicitationRequestedSchema(d.RequestedSchema),
+			Mode:                         d.Mode,
+			ElicitationSource:            d.ElicitationSource,
+			ElicitationSourceDisplayName: d.ElicitationSourceDisplayName,
+			URL:                          d.URL,
 		}, d.RequestID)
 
 	case *CapabilitiesChangedData:

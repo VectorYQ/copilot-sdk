@@ -1385,6 +1385,9 @@ public sealed class ElicitationContext
     /// <summary>The source that initiated the request (e.g., MCP server name).</summary>
     public string? ElicitationSource { get; set; }
 
+    /// <summary>Trusted display label of a Connector-owned MCP server that initiated the request, such as "Work IQ".</summary>
+    public string? ElicitationSourceDisplayName { get; set; }
+
     /// <summary>URL to open in the user's browser (url mode only).</summary>
     public string? Url { get; set; }
 }

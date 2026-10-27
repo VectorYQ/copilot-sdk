@@ -2598,3 +2598,34 @@ func TestSession_ElicitationRequestSchema(t *testing.T) {
 		}
 	})
 }
+
+func TestElicitationHandlerReceivesConnectorDisplayName(t *testing.T) {
+	session, cleanup := newTestSession()
+	defer cleanup()
+	contexts := make(chan ElicitationContext, 1)
+	// The handler never returns: answering would need a live RPC connection.
+	session.registerElicitationHandler(func(ctx ElicitationContext) (ElicitationResult, error) {
+		contexts <- ctx
+		select {}
+	})
+	source := "github-copilot-connector-1"
+	label := "Work IQ"
+	session.dispatchEvent(SessionEvent{Data: &ElicitationRequestedData{
+		RequestID:                    "request-1",
+		Message:                      "Pick one",
+		ElicitationSource:            &source,
+		ElicitationSourceDisplayName: &label,
+	}})
+
+	select {
+	case ctx := <-contexts:
+		if ctx.ElicitationSource == nil || *ctx.ElicitationSource != source {
+			t.Errorf("ElicitationSource = %v, want %q", ctx.ElicitationSource, source)
+		}
+		if ctx.ElicitationSourceDisplayName == nil || *ctx.ElicitationSourceDisplayName != label {
+			t.Errorf("ElicitationSourceDisplayName = %v, want %q", ctx.ElicitationSourceDisplayName, label)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("elicitation handler was not called")
+	}
+}

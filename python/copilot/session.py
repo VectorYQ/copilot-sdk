@@ -842,6 +842,8 @@ class ElicitationContext(TypedDict, total=False):
     """Elicitation mode: ``"form"`` for structured input, ``"url"`` for browser redirect."""
     elicitationSource: str
     """The source that initiated the request (e.g. MCP server name)."""
+    elicitationSourceDisplayName: str
+    """Trusted display label of a Connector-owned MCP server that initiated the request."""
     url: str
     """URL to open in the browser (when mode is ``"url"``)."""
 
@@ -2985,6 +2987,8 @@ class CopilotSession:
                     context["mode"] = data.mode.value
                 if data.elicitation_source is not None:
                     context["elicitationSource"] = data.elicitation_source
+                if data.elicitation_source_display_name is not None:
+                    context["elicitationSourceDisplayName"] = data.elicitation_source_display_name
                 if data.url is not None:
                     context["url"] = data.url
                 asyncio.ensure_future(self._handle_elicitation_request(context, request_id))

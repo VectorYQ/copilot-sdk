@@ -1142,6 +1142,8 @@ export interface ElicitationContext {
     mode?: "form" | "url";
     /** The source that initiated the request (e.g. MCP server name). */
     elicitationSource?: string;
+    /** Trusted display label of a Connector-owned MCP server that initiated the request, such as "Work IQ". */
+    elicitationSourceDisplayName?: string;
     /** URL to open in the user's browser (url mode only). */
     url?: string;
 }

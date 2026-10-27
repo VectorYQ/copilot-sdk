@@ -1264,6 +1264,7 @@ public sealed partial class CopilotSession : IAsyncDisposable
                                     RequestedSchema = schema,
                                     Mode = data.Mode,
                                     ElicitationSource = data.ElicitationSource,
+                                    ElicitationSourceDisplayName = data.ElicitationSourceDisplayName,
                                     Url = data.Url
                                 },
                                 data.RequestId);

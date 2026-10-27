@@ -1578,7 +1578,8 @@ public final class CopilotSession implements AutoCloseable {
                 }
                 var context = new ElicitationContext().setSessionId(sessionId).setMessage(data.message())
                         .setRequestedSchema(schema).setMode(data.mode() != null ? data.mode().getValue() : null)
-                        .setElicitationSource(data.elicitationSource()).setUrl(data.url());
+                        .setElicitationSource(data.elicitationSource())
+                        .setElicitationSourceDisplayName(data.elicitationSourceDisplayName()).setUrl(data.url());
                 handleElicitationRequestAsync(context, data.requestId());
             }
         } else if (event instanceof CapabilitiesChangedEvent capEvent) {
